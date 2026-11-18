@@ -140,11 +140,11 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--gold); outl
       <p>Pick a game. Play on your phone, then send your score to the group.</p>
     </div>
     <nav class="games" id="games" aria-label="Games"></nav>
-    <p class="foot">Early prototype. Scores stay on your phone.<br>Film facts from Wikidata, IMDb and the Tamil movie knowledge graph.</p>
+    <p class="foot">Early prototype. Scores stay on your phone.<br>Film facts from Wikidata, IMDb and the Tamil movie knowledge graph.<br>Posters via Wikipedia, shown for a private test among friends.</p>
   </section>
 </main>
 <script>
-const SITE = {"games": [{"id": "three-clues", "name": "Three Clues", "daily": false, "order": 1, "accent": "t-pink", "blurb": "Three tickets, three words, one film."}, {"id": "co-star", "name": "Co-Star", "daily": false, "order": 2, "accent": "t-mint", "blurb": "Link two stars through the films they shared."}, {"id": "crossword", "name": "Daily Crossword", "daily": true, "order": 3, "accent": "t-yellow", "blurb": "A new grid every day. Same one for everyone."}, {"id": "song-riddle", "name": "Song Riddle", "daily": false, "order": 4, "accent": "muted", "blurb": "Name the song from its story, its music, its voices."}]};
+const SITE = {"games": [{"id": "three-clues", "name": "Three Clues", "daily": false, "order": 1, "accent": "t-pink", "blurb": "Three tickets, three words, one film."}, {"id": "co-star", "name": "Co-Star", "daily": false, "order": 2, "accent": "t-mint", "blurb": "Link two stars through the films they shared."}, {"id": "crossword", "name": "Daily Crossword", "daily": true, "order": 3, "accent": "t-yellow", "blurb": "A new grid every day. Same one for everyone."}, {"id": "song-riddle", "name": "Song Riddle", "daily": false, "order": 4, "accent": "muted", "blurb": "Name the song from its story, its music, its voices."}, {"id": "poster-zoom", "name": "Poster Zoom", "daily": false, "order": 5, "accent": "coral", "blurb": "A tight crop of a poster. Each clue zooms out."}]};
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 document.getElementById("games").innerHTML = SITE.games.map((g, i) => `
   <a class="card" href="${esc(g.id)}/" style="background:var(--${esc(g.accent)})">
