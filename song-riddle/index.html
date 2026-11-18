@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Song Riddle</title>
+<link href="https://fonts.googleapis.com/css2?family=Anek+Tamil:wdth,wght@75..125,400..800&family=Catamaran:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Brand tokens shared by every game. Games use these variables and never hard-code brand colours or fonts.
+   Fonts load from design/fonts.html. Build inlines both into each game's client at <!--BRAND-->. */
+:root {
+  --night: #17123B; --night-2: #221B4F; --night-3: #2E2662; --line: rgba(255,244,226,.10);
+  --stage: #0D0A24; --paper: #FFF4E2; --muted: #B9B0D9;
+  --gold: #FFC627; --coral: #FF5A5F; --mint: #3DDC97;
+  --t-pink: #FF8FB1; --t-yellow: #FFD45C; --t-mint: #8FE3C6; --ink: #17123B;
+  color-scheme: dark;
+  --display: "Anek Tamil", system-ui, sans-serif; --body: "Catamaran", system-ui, sans-serif;
+}
+/* House UI shared by every game: phone frame, header, timer ring, buttons, autocomplete answer field, reveal,
+   ratings, end screen. Uses only design/tokens.css variables. Inlined by tools/build.py at <!--BRAND-->.
+   A game's own stylesheet holds only what is unique to it (Three Clues' tickets, Co-Star's route rail). */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { background: var(--stage); color: var(--paper); font-family: var(--body); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+
+.app { max-width: 430px; min-height: 100%; margin: 0 auto; background: var(--night); display: flex; flex-direction: column; padding: max(16px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom)); }
+@media (min-width: 600px) { body { padding: 32px 0; } .app { min-height: 820px; border-radius: 36px; box-shadow: 0 0 0 10px #050414, 0 0 0 11px #2a2450, 0 30px 60px rgba(0,0,0,.5); } }
+.screen { flex: 1; display: flex; flex-direction: column; }
+
+.head { display: flex; align-items: center; justify-content: space-between; min-height: 44px; margin-bottom: 14px; }
+.head .r { font-size: 15px; font-weight: 600; color: var(--muted); }
+.head .r b { color: var(--paper); }
+.score { font-family: var(--display); font-weight: 800; font-size: 20px; font-variant-numeric: tabular-nums; }
+.score small { font-family: var(--body); font-weight: 600; font-size: 13px; color: var(--muted); margin-right: 4px; }
+.timer { display: flex; align-items: center; gap: 8px; font-family: var(--display); font-weight: 700; font-size: 20px; font-variant-numeric: tabular-nums; color: var(--coral); }
+.timer svg { width: 26px; height: 26px; }
+.timer .bg { stroke: var(--coral); opacity: .22; }
+.timer .fg { stroke: var(--coral); transition: stroke-dashoffset 1s linear; }
+
+.btn { min-height: 54px; border-radius: 16px; border: 0; font-size: 17px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
+.btn-primary { background: var(--gold); color: var(--ink); }
+.btn-quiet { background: var(--night-2); color: var(--paper); }
+.eyebrow { font-size: 13px; font-weight: 600; color: var(--muted); }
+
+/* start */
+.hero { padding: 48px 0 28px; }
+.hero h1 { font-family: var(--display); font-weight: 800; font-stretch: 85%; font-size: 56px; line-height: .92; letter-spacing: -.01em; margin-top: 10px; }
+.hero p { color: var(--muted); font-size: 17px; line-height: 1.45; margin-top: 14px; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--night-2); border-radius: 14px; padding: 4px; margin: 8px 0 22px; }
+.seg button { min-height: 44px; border: 0; background: none; font-size: 15px; font-weight: 600; color: var(--muted); border-radius: 10px; }
+.seg button[aria-pressed="true"] { background: var(--night-3); color: var(--paper); box-shadow: inset 0 0 0 1px rgba(255,244,226,.12); }
+.meta-line { font-size: 13px; color: var(--muted); text-align: center; margin-top: 12px; }
+
+.row { display: flex; gap: 10px; margin-top: 14px; }
+.row .btn { min-height: 46px; font-size: 15px; white-space: nowrap; }
+.row .btn.fit { flex: 0 0 auto; width: auto; padding-inline: 22px; }
+.misses { min-height: 22px; margin: 14px 4px 0; font-size: 15px; color: var(--muted); }
+.misses s { color: var(--coral); text-decoration-thickness: 1.5px; margin-right: 8px; }
+
+/* answer field with autocomplete */
+.answer { margin-top: auto; padding-top: 16px; position: relative; }
+.suggest { background: var(--night-2); border-radius: 16px; padding: 6px; margin-bottom: 8px; }
+.suggest:empty { display: none; }
+.sug { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 50px; padding: 0 12px; border-radius: 12px; width: 100%; border: 0; background: none; text-align: left; }
+.sug[aria-selected="true"], .sug:hover { background: var(--night-3); }
+.sug .t { font-size: 17px; font-weight: 700; }
+.sug .t mark { background: none; color: var(--gold); }
+.sug .m { font-size: 13px; color: var(--muted); flex: none; }
+.field { display: flex; align-items: center; gap: 10px; height: 54px; background: var(--paper); color: var(--ink); border-radius: 16px; padding: 0 7px 0 16px; }
+.field.shake { animation: shake .35s; }
+@keyframes shake { 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
+.field input { flex: 1; border: 0; background: none; font: inherit; font-size: 17px; font-weight: 600; color: var(--ink); min-width: 0; }
+.field input:focus-visible { outline: none; }
+.field input::placeholder { color: #6E6890; font-weight: 500; }
+.field .go { width: 42px; height: 42px; border-radius: 12px; background: var(--ink); color: var(--gold); display: grid; place-items: center; border: 0; flex: none; }
+.field .go svg { width: 20px; height: 20px; }
+
+/* reveal */
+.reveal-top { text-align: center; padding: 22px 0 18px; }
+.verdict { display: inline-block; font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 8px; margin-bottom: 12px; color: var(--ink); }
+.verdict.win { background: var(--mint); } .verdict.lose { background: var(--coral); } .verdict.near { background: var(--gold); }
+.film { font-family: var(--display); font-weight: 800; font-stretch: 88%; font-size: 48px; line-height: .95; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.film-ta { font-family: var(--display); font-weight: 600; font-size: 22px; color: var(--muted); margin-top: 6px; }
+.film-meta { font-size: 14px; color: var(--muted); margin-top: 8px; }
+.points { font-family: var(--display); font-weight: 800; font-size: 40px; color: var(--mint); text-align: center; font-variant-numeric: tabular-nums; }
+.points.zero { color: var(--muted); }
+.why { background: var(--night-2); border-radius: 16px; padding: 14px 16px; margin-top: 14px; font-size: 15px; line-height: 1.45; color: var(--muted); }
+.why b { color: var(--paper); font-weight: 600; }
+.rate { margin-top: 14px; }
+.rate .opts { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; margin-top: 8px; }
+.rate button { min-height: 52px; border: 0; border-radius: 12px; background: var(--night-2); font-size: 13px; font-weight: 600; color: var(--muted); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.rate button span { font-size: 18px; }
+.rate button[aria-pressed="true"] { background: var(--night-3); color: var(--paper); box-shadow: inset 0 0 0 1.5px var(--gold); }
+.next-wrap { margin-top: auto; padding-top: 16px; display: grid; gap: 8px; }
+
+/* end */
+.mark { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 10px; vertical-align: 1px; }
+.mark.hit { background: var(--mint); } .mark.near { background: var(--gold); } .mark.miss { background: transparent; box-shadow: inset 0 0 0 2px var(--coral); }
+.sync-note { text-align: center; }
+.sync-note.bad { color: var(--coral); }
+.export { background: none; border: 0; color: var(--muted); font-size: 13px; text-decoration: underline; min-height: 32px; }
+
+.hidden { display: none !important; }
+@media (prefers-reduced-motion: reduce) { .field.shake { animation: none; } .timer .fg { transition: none; } }
+</style>
+<style>
+  /* Song Riddle only: the clue ladder. Everything else comes from design/kit.css. */
+  .ladder { display: flex; flex-direction: column; gap: 10px; }
+  .rung { display: flex; gap: 12px; align-items: flex-start; border-radius: 14px; padding: 12px 14px; background: var(--night-2); color: var(--muted); }
+  .rung .pts { flex: none; font-family: var(--display); font-weight: 800; font-size: 15px; min-width: 44px; padding: 3px 0; border-radius: 6px; text-align: center; background: var(--night-3); color: var(--muted); }
+  .rung .k { font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+  .rung .v { font-size: 17px; font-weight: 600; line-height: 1.35; margin-top: 2px; }
+  .rung.open { background: var(--paper); color: var(--ink); animation: drop .35s cubic-bezier(.2,.9,.3,1.2); }
+  .rung.open .pts { background: var(--t-yellow); color: var(--ink); }
+  .rung.open .k { opacity: .6; }
+  .rung.story.open { background: var(--t-pink); }
+  .rung.story .v { font-family: var(--display); font-size: 21px; font-weight: 700; line-height: 1.25; }
+  .rung.locked .v { filter: blur(5px); user-select: none; }
+  @keyframes drop { from { transform: translateY(-6px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .mode-note { font-size: 14px; color: var(--muted); margin: -12px 4px 18px; line-height: 1.4; }
+  .note-line { min-height: 22px; margin: 10px 4px 0; font-size: 15px; color: var(--muted); }
+  .note-line.close { color: var(--gold); }
+  .note-line.bad { color: var(--coral); }
+  @media (prefers-reduced-motion: reduce) { .rung.open { animation: none; } }
+</style>
+</head>
+<body>
+<main class="app" id="app">
+<style>.home-link{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;min-height:32px;margin:-6px 0 6px;
+font-size:14px;font-weight:600;color:var(--muted);text-decoration:none}.home-link:hover{color:var(--paper)}</style>
+<a class="home-link" href="../">‹ All games</a>
+
+  <!-- START -->
+  <section class="screen" id="screen-start">
+    <div class="hero">
+      <div class="eyebrow">Prototype · solo play</div>
+      <h1>Song Riddle</h1>
+      <p>Name the Tamil film song. Clues open one at a time: what it's about, who scored it, who sang it, the film. Fewer clues, more points.</p>
+    </div>
+    <div class="eyebrow" style="margin-left:4px">Mode</div>
+    <div class="seg" role="group" aria-label="Mode">
+      <button data-mode="story" aria-pressed="true">Story clues</button>
+      <button data-mode="buff" aria-pressed="false">Buff mode</button>
+    </div>
+    <p class="mode-note" id="mode-note"></p>
+    <div style="margin-top:auto"></div>
+    <button class="btn btn-primary" id="btn-start"></button>
+    <p class="meta-line" id="pool-line"></p>
+  </section>
+
+  <!-- ROUND -->
+  <section class="screen hidden" id="screen-round">
+    <div class="head">
+      <span class="r">Song <b id="r-num">1</b> of <span id="r-total">6</span></span>
+      <span class="timer" aria-live="off">
+        <svg viewBox="0 0 26 26" aria-hidden="true"><circle class="bg" cx="13" cy="13" r="10.5" fill="none" stroke-width="3"/><circle class="fg" id="t-ring" cx="13" cy="13" r="10.5" fill="none" stroke-width="3" stroke-linecap="round" stroke-dasharray="66" stroke-dashoffset="0" transform="rotate(-90 13 13)"/></svg>
+        <span id="t-text">1:00</span>
+      </span>
+    </div>
+    <div class="ladder" id="ladder" aria-live="polite"></div>
+    <div class="row">
+      <button class="btn btn-quiet" id="btn-clue" style="flex:1">Next clue</button>
+      <button class="btn btn-quiet fit" id="btn-give-up">Give up</button>
+    </div>
+    <div class="note-line" id="note" aria-live="polite"></div>
+    <form class="answer" id="answer-form" autocomplete="off">
+      <div class="field" id="field">
+        <input id="guess" type="text" placeholder="Song name, any spelling…" aria-label="Song name" autocapitalize="off" spellcheck="false">
+        <button class="go" type="submit" aria-label="Guess"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+      </div>
+    </form>
+  </section>
+
+  <!-- REVEAL -->
+  <section class="screen hidden" id="screen-reveal">
+    <div class="head">
+      <span class="r">Song <b id="v-num">1</b> of <span id="v-total">6</span></span>
+      <span class="score"><small>Score</small><span id="v-score">0</span></span>
+    </div>
+    <div class="reveal-top">
+      <span class="verdict" id="v-verdict"></span>
+      <div class="film" id="v-title" style="font-size:40px"></div>
+      <div class="film-meta" id="v-meta"></div>
+    </div>
+    <div class="points" id="v-points"></div>
+    <div class="why" id="v-why"></div>
+    <div class="rate">
+      <div class="eyebrow" style="margin-left:4px">How was this one?</div>
+      <div class="opts" id="rate" role="group" aria-label="Rate this song">
+        <button data-rate="loved" aria-pressed="false"><span>🔥</span>Loved</button>
+        <button data-rate="easy" aria-pressed="false"><span>🥱</span>Too easy</button>
+        <button data-rate="hard" aria-pressed="false"><span>🤯</span>Too hard</button>
+        <button data-rate="wrong" aria-pressed="false"><span>🚩</span>Wrong clue</button>
+      </div>
+    </div>
+    <div class="next-wrap">
+      <button class="btn btn-primary" id="btn-next">Next song</button>
+    </div>
+  </section>
+
+  <!-- END -->
+  <section class="screen hidden" id="screen-end">
+    <div class="hero" style="text-align:center">
+      <div class="eyebrow" id="e-sub"></div>
+      <h1 style="font-size:52px" id="e-title"></h1>
+      <p id="e-line"></p>
+    </div>
+    <div class="why" id="e-list"></div>
+    <div class="next-wrap">
+      <button class="btn btn-primary" id="btn-again">Play again</button>
+      <p class="eyebrow sync-note" id="sync-note" hidden aria-live="polite"></p>
+    </div>
+  </section>
+
+</main>
+
+<script>
+/* Shared client kit for every game. Inlined by tools/build.py at the KIT marker, before the game's own script.
+   Kit.$ / esc / norm / store / shake       small helpers
+   Kit.screens(names)                       returns show(name): one <section id="screen-<name>"> visible at a time
+   Kit.save(path, data) / Kit.remove(path)  write to the artifact's shared db when published (no-op from a file)
+   Kit.renderSync(el, reader)               end-screen line saying whether results were saved, never silent
+   Kit.autocomplete({...})                  answer field with suggestions, arrow keys and Enter
+   Kit.countdown({...})                     timer ring + m:ss text
+   Kit.rating({...})                        Loved / Too easy / Too hard / Wrong buttons, saved locally and to the db */
+const Kit = (() => {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  // Same rule as tools/common.answer_key: lowercase, accents and punctuation dropped, Tamil script kept.
+  const norm = (s) => (s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9஀-௿]/g, "");
+  const store = {
+    get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+  const shake = (el) => { el.classList.remove("shake"); void el.offsetWidth; el.classList.add("shake"); };
+  const screens = (names) => (id) => { for (const s of names) $("screen-" + s).classList.toggle("hidden", s !== id); };
+  const mmss = (s) => `${Math.floor(Math.max(s, 0) / 60)}:${String(Math.max(s, 0) % 60).padStart(2, "0")}`;
+
+  // ---- results to the artifact db. state: local (plain file) | checking | on | off ----
+  let db = null, me = "local";
+  const sync = { state: window.claude?.use ? "checking" : "local", saved: 0, failed: 0, error: "" };
+  const ready = (async () => {
+    if (sync.state === "local") return false;
+    try {
+      db = await window.claude.use("db");
+      const user = await window.claude.use("user");
+      if (user) me = (await user.id()) || "anon";
+    } catch (e) { sync.error = e?.code || e?.message || String(e); }
+    sync.state = db ? "on" : "off";
+    return !!db;
+  })();
+  let syncEl = null, syncReader = "";
+  const write = (fn) => {
+    if (!db) return;
+    fn(db).then(() => { sync.saved++; paint(); })
+      .catch((e) => { sync.failed++; sync.error = e?.code || e?.message || String(e); console.warn("db write failed", e); paint(); });
+  };
+  const tag = () => me.slice(0, 8);
+  const save = (path, data) => write((d) => d.doc(path).set({ ...data, player: me, at: new Date().toISOString() }));
+  const remove = (path) => write((d) => d.doc(path).delete());
+  function paint() {
+    if (!syncEl) return;
+    const t = {
+      local: "",
+      checking: "Still connecting, so results may not be saved.",
+      off: "Not saved: this view can't reach the shared store. Open the artifact while signed in with edit access.",
+      on: sync.failed ? `Not saved: ${sync.failed} of ${sync.saved + sync.failed} saves failed (${sync.error}).` : `Saved ${sync.saved} results for ${syncReader}.`,
+    }[sync.state];
+    syncEl.textContent = t; syncEl.hidden = !t; syncEl.classList.toggle("bad", sync.state !== "on" || sync.failed > 0);
+  }
+  const renderSync = (el, reader) => { syncEl = el; syncReader = reader; paint(); };
+
+  // ---- autocomplete answer field ----
+  // search(q) -> [{label, meta, value}]; onPick(item) when a suggestion is chosen; onText(text) on Enter with none.
+  function autocomplete({ form, input, list, search, onPick, onText = () => {}, max = 4 }) {
+    let items = [], sel = 0;
+    const render = () => {
+      const q = input.value.trim();
+      items = q.length >= 2 ? search(q).slice(0, max) : [];
+      sel = 0; list.innerHTML = "";
+      items.forEach((it, i) => {
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "sug"; b.setAttribute("role", "option"); b.setAttribute("aria-selected", i === sel);
+        const k = it.label.toLowerCase().indexOf(q.toLowerCase());
+        const label = k >= 0 ? esc(it.label.slice(0, k)) + "<mark>" + esc(it.label.slice(k, k + q.length)) + "</mark>" + esc(it.label.slice(k + q.length)) : esc(it.label);
+        b.innerHTML = `<span class="t">${label}</span><span class="m">${esc(it.meta ?? "")}</span>`;
+        b.addEventListener("click", () => pick(it));
+        list.appendChild(b);
+      });
+    };
+    const pick = (it) => { input.value = ""; render(); onPick(it); };
+    input.addEventListener("input", render);
+    input.addEventListener("keydown", (e) => {
+      if (!items.length || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
+      e.preventDefault(); sel = (sel + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length;
+      [...list.children].forEach((o, i) => o.setAttribute("aria-selected", i === sel));
+    });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (items.length) return pick(items[sel]);
+      const t = input.value.trim(); if (t) onText(t);
+    });
+    return { clear() { input.value = ""; render(); }, focus() { setTimeout(() => input.focus(), 50); } };
+  }
+
+  // ---- countdown with ring (circle.fg with r=10.5 -> circumference 66) ----
+  function countdown({ ring, text, onEnd, onTick = () => {} }) {
+    let timer = null, total = 1, left = 0;
+    const paintT = () => { text.textContent = mmss(left); ring.style.strokeDashoffset = 66 * (1 - Math.max(left, 0) / total); onTick(left); };
+    return {
+      start(seconds) { clearInterval(timer); total = left = seconds; paintT(); timer = setInterval(() => { left--; paintT(); if (left <= 0) { clearInterval(timer); onEnd(); } }, 1000); },
+      stop() { clearInterval(timer); },
+      get left() { return left; }, get total() { return total; }, mmss,
+    };
+  }
+
+  // ---- ratings: buttons with data-rate inside container ----
+  function rating({ container, storeKey }) {
+    // In memory first: browser storage can be missing (private windows, previews), and the buttons must still work.
+    let id = null, meta = {};
+    const all = store.get(storeKey, {});
+    const btns = [...container.querySelectorAll("button[data-rate]")];
+    const paintR = () => { const r = all[id]?.rate; btns.forEach((b) => b.setAttribute("aria-pressed", r === b.dataset.rate)); };
+    btns.forEach((b) => b.addEventListener("click", () => {
+      const on = all[id]?.rate !== b.dataset.rate;
+      if (on) all[id] = { rate: b.dataset.rate, ...meta, at: new Date().toISOString() }; else delete all[id];
+      store.set(storeKey, all); paintR();
+      if (on) save(`ratings/${id}-${tag()}`, { ...all[id], item: id }); else remove(`ratings/${id}-${tag()}`);
+    }));
+    return { show(itemId, itemMeta) { id = itemId; meta = itemMeta; paintR(); }, all: () => all };
+  }
+
+  return { $, esc, norm, store, shake, screens, ready, save, remove, renderSync, tag, autocomplete, countdown, rating, mmss };
+})();
+
+</script>
+<script>
+const DATA = {"game":{"id":"song-riddle","name":"Song Riddle","tagline":"What's the song? A one-line story, then the music, the voices, the film. Name it in fewer clues.","status":"prototype","uses_catalogue":["songs","films","credits","people"],"levels":["story","buff"],"rules":{"rounds":6,"round_seconds":60,"points":[400,300,200,100],"speed_bonus":100,"match_threshold":0.8,"close_threshold":0.62},"home":{"order":4,"accent":"muted","blurb":"Name the song from its story, its music, its voices."}},"songs":[["song:wd-q12975794:aila-aila","Aila Aila",[],"I",2015,["A. R. Rahman"],["Natalie Di Luccio","Aditya Rao"],["Madhan Karky"],null],["song:wd-q12975794:ennodu-nee-irundhaal","Ennodu Nee Irundhaal",[],"I",2015,["A. R. Rahman"],["Chinmayi","Sid Sriram","Sunitha Sarathy"],["Kabilan"],null],["song:wd-q12975794:ladio","Ladio",[],"I",2015,["A. R. Rahman"],["Nikhita Gandhi"],["Madhan Karky"],null],["song:wd-q12975794:mersalaayitten","Mersalaayitten",[],"I",2015,["A. R. Rahman"],["Anirudh Ravichander","Neeti Mohan"],["Kabilan"],null],["song:wd-q12975794:pookkalae-sattru-oyivedungal","Pookkalae Sattru Oyivedungal",[],"I",2015,["A. R. Rahman"],["Shreya Ghoshal","Hariharan"],["Madhan Karky"],null],["song:wd-q3521366:honey-honey","Honey Honey",[],"Ayan",2009,["Harris Jayaraj"],["Devan Ekambaram","Sayanora Philip"],["Pa. Vijay"],null],["song:wd-q3521366:nenje-nenje","Nenje Nenje",[],"Ayan",2009,["Harris Jayaraj"],["Harish Raghavendra","Mahathi"],["Vairamuthu"],null],["song:wd-q3521366:oh-super-nova","Oh Super Nova",[],"Ayan",2009,["Harris Jayaraj"],["Krish"],["Na. Muthukumar"],null],["song:wd-q3521366:oyaayiye-yaayiye","Oyaayiye Yaayiye",[],"Ayan",2009,["Harris Jayaraj"],["Chinmayi","Benny Dayal","Hariharan"],["Pa. Vijay"],null],["song:wd-q3521366:pala-pala","Pala Pala",[],"Ayan",2009,["Harris Jayaraj"],["Hariharan"],["Na. Muthukumar"],null],["song:wd-q3521366:vizhi-moodi","Vizhi Moodi",[],"Ayan",2009,["Harris Jayaraj"],["Karthik","Prashanthini"],["Na. Muthukumar"],null],["song:wd-q7709996:hot-party","Hot Party",[],"Thamizhan",2002,["D. Imman"],["Tippu","Mathangi"],["Vaali"],null],["song:wd-q7709996:lala-law-mudichom","Lala Law Mudichom",[],"Thamizhan",2002,["D. Imman"],["Shankar Mahadevan","Lavanya"],["Vairamuthu"],null],["song:wd-q7709996:mattu-mattu","Mattu Mattu",[],"Thamizhan",2002,["D. Imman"],["D. Imman","Anuradha Sriram"],["Vairamuthu"],null],["song:wd-q7709996:tamizha-tamizha","Tamizha Tamizha",[],"Thamizhan",2002,["D. Imman"],["Karthik"],["Vairamuthu"],null],["song:wd-q7709996:ullathai-killathe","Ullathai Killathe",[],"Thamizhan",2002,["D. Imman"],["Vijay","Priyanka Chopra"],["Vairamuthu"],null],["song:wd-q19804229:24-carat","24 Carat",[],"24",2016,["A. R. Rahman","Joshua Sridhar"],["Arjun Chandy"],["Madhan Karky"],null],["song:wd-q19804229:aararoo","Aararoo",[],"24",2016,["A. R. Rahman","Joshua Sridhar"],["Shakthisree Gopalan"],["Madhan Karky"],null],["song:wd-q19804229:kaalam-yen-kadhali","Kaalam Yen Kadhali",[],"24",2016,["A. R. Rahman","Joshua Sridhar"],["Benny Dayal","Shashwat Singh","Abhay Jodhpurkar"],["Vairamuthu"],null],["song:wd-q19804229:mei-nigara","Mei Nigara",[],"24",2016,["A. R. Rahman","Joshua Sridhar"],["Jonita Gandhi","Sid Sriram","Sanah Moidutty"],["Madhan Karky"],null],["song:wd-q19804229:my-twin-brother","My Twin Brother",[],"24",2016,["A. R. Rahman","Joshua Sridhar"],["Srinivasa Krishnan","Hriday Gattani"],["Vikram Kumar"],null],["song:wd-q19804229:naan-un","Naan Un",[],"24",2016,["A. R. Rahman","Joshua Sridhar"],["Arijit Singh","Chinmayi Sripada"],["Madhan Karky"],null],["song:wd-q19804229:punnagaye","Punnagaye",[],"24",2016,["A. R. Rahman","Joshua Sridhar"],["Shashaa Tirupati","Hariharan"],["Vairamuthu"],null],["song:wd-q27963176:karuppu-vellai","Karuppu Vellai",[],"Vikram Vedha",2017,["Sam C. S."],["Sam C. S.","Sivam"],["Vignesh Shivan"],null],["song:wd-q27963176:pogatha-yennavittu","Pogatha Yennavittu",[],"Vikram Vedha",2017,["Sam C. S."],["Neha Venugopal","Pradeep Kumar"],["Sam C. S."],null],["song:wd-q27963176:tasakku-tasakku","Tasakku Tasakku",[],"Vikram Vedha",2017,["Sam C. S."],["Mukesh Mohamed","M. L. R. Karthikeyan","Gana Guna"],["Muthamil","Manikandan"],null],["song:wd-q27963176:yaanji","Yaanji",[],"Vikram Vedha",2017,["Sam C. S."],["Anirudh Ravichander","Shakthisree Gopalan","Sathyaprakash"],["Mohan Rajan"],null],["song:wd-q56523863:aaha-kalyanam","Aaha Kalyanam",[],"Petta",2019,["Anirudh Ravichander"],["Anthony Daasan"],["Ku. Karthik"],null],["song:wd-q56523863:ilamai-thirumbuthe","Ilamai Thirumbuthe",[],"Petta",2019,["Anirudh Ravichander"],["Anirudh Ravichander"],["Dhanush"],null],["song:wd-q56523863:marana-mass","Marana Mass",[],"Petta",2019,["Anirudh Ravichander"],["S. P. Balasubrahmanyam","Anirudh Ravichander"],["Vivek"],"An intro number for a hostel warden with a mysterious past."],["song:wd-q56523863:petta-paraak","Petta Paraak",[],"Petta",2019,["Anirudh Ravichander"],["Anirudh Ravichander"],["Vivek"],null],["song:wd-q56523863:thappad-maara","Thappad Maara",[],"Petta",2019,["Anirudh Ravichander"],["Sarwar Khan","Sartaz Khan Barna"],["Karthik Subbaraj"],null],["song:wd-q56523863:ullaallaa","Ullaallaa",[],"Petta",2019,["Anirudh Ravichander"],["Inno Genga","Nakash Aziz"],["Vivek"],null],["song:wd-q2739153:chinna-chinna-asai-version-1","Chinna Chinna Asai",[],"Roja",1992,["A. R. Rahman"],["Minmini"],["Vairamuthu"],"A village girl lists all the small, impossible things she longs to do before life ties her down."],["song:wd-q2739153:kaadhal-rojave","Kaadhal Rojave",[],"Roja",1992,["A. R. Rahman"],["S. P. Balasubrahmanyam","Sujatha Mohan"],["Vairamuthu"],"A man held captive in the mountains aches for the wife he can't reach."],["song:wd-q2739153:pudhu-vellai-mazhai","Pudhu Vellai Mazhai",[],"Roja",1992,["A. R. Rahman"],["Unni Menon","Sujatha Mohan"],["Vairamuthu"],"Newlyweds, still shy with each other, warm up in a cold, snowy valley."],["song:wd-q2739153:rukkumani-rukkumani","Rukkumani Rukkumani",[],"Roja",1992,["A. R. Rahman"],["K. S. Chithra","S. P. Balasubrahmanyam"],["Vairamuthu"],null],["song:wd-q2739153:thamizha-thamizha","Thamizha Thamizha",[],"Roja",1992,["A. R. Rahman"],["Hariharan"],["Subramanya Bharathi"],null],["song:wd-q283490:arima-arima","Arima Arima",[],"Enthiran",2010,["A. R. Rahman"],["Sadhana Sargam","Naresh Iyer","Hariharan"],["Vairamuthu"],"A rogue robot's menacing anthem as it claims the woman it wants."],["song:wd-q283490:boom-boom-robot-da","Boom Boom Robot Da",[],"Enthiran",2010,["A. R. Rahman"],["Yogi B","Keerthi Sagathia","Shweta Mohan"],["Madhan Karky"],null],["song:wd-q283490:irumbile-oru-idhaiyam","Irumbile Oru Idhaiyam",[],"Enthiran",2010,["A. R. Rahman"],["A. R. Rahman","Kash n' Krissy"],["Madhan Karky","Kash n' Krissy"],"A machine realises, to its own surprise, that it has fallen in love."],["song:wd-q283490:kadhal-anukkal","Kadhal Anukkal",[],"Enthiran",2010,["A. R. Rahman"],["Vijay Prakash","Shreya Ghoshal"],["Vairamuthu"],null],["song:wd-q283490:kilimanjaro","Kilimanjaro",[],"Enthiran",2010,["A. R. Rahman"],["Chinmayi","Javed Ali"],["Pa. Vijay"],"A bright, wild duet filmed among ancient mountain ruins in Peru."],["song:wd-q283490:puthiya-manidha","Puthiya Manidha",[],"Enthiran",2010,["A. R. Rahman"],["S. P. Balasubrahmanyam","A. R. Rahman","Khatija Rahman"],["Vairamuthu"],null],["song:wd-q1188411:ayyayo","Ayyayo",[],"Aadukalam",2011,["G. V. P. Prakash Kumar"],["S. P. Balasubrahmanyam","S. P. B. Charan","Prashanthini"],["Snehan"],null],["song:wd-q1188411:en-vennilave","En Vennilave",[],"Aadukalam",2011,["G. V. P. Prakash Kumar"],["KK"],["V. I. S. Jayapalan"],null],["song:wd-q1188411:otha-sollaala","Otha Sollaala",[],"Aadukalam",2011,["G. V. P. Prakash Kumar"],["Velmurugan"],["Ekadesi"],"A young cockfight handler dances madly in the street because the girl finally noticed him."],["song:wd-q1188411:porkkalam","Porkkalam",[],"Aadukalam",2011,["G. V. P. Prakash Kumar"],["Yogi B","Alwa Vasu"],["Yugabharathi"],null],["song:wd-q1188411:warriors","Warriors",[],"Aadukalam",2011,["G. V. P. Prakash Kumar"],["Yogi B","Alwa Vasu"],["Yogi B"],null],["song:wd-q1188411:yathe-yathe","Yathe Yathe",[],"Aadukalam",2011,["G. V. P. Prakash Kumar"],["G. V. Prakash Kumar"],["Snehan"],null],["song:wd-q760266:isaiyil-thodanguthamma","Isaiyil Thodanguthamma",[],"Hey Ram",2000,["Ilaiyaraaja"],["Ajoy Chakrabarty"],["Ilaiyaraaja"],null],["song:wd-q760266:ram-ram","Ram Ram",[],"Hey Ram",2000,["Ilaiyaraaja"],["Kamal Haasan","Shruti Haasan"],["Kamal Haasan"],null],["song:wd-q760266:ramaranalum","Ramaranalum",[],"Hey Ram",2000,["Ilaiyaraaja"],["Kamal Haasan","Jolly Mukherjee","Hariharan"],["Vaali"],null],["song:wd-q30597974:anthaathi","Anthaathi",[],"'96",2018,["Govind Vasantha"],["Govind Vasantha","Chinmayi","Bhadra Rajin"],["Uma Devi"],null],["song:wd-q30597974:iravingu-theevai","Iravingu Theevai",[],"'96",2018,["Govind Vasantha"],["Chinmayi","Pradeep Kumar"],["Uma Devi"],null],["song:wd-q30597974:kaathalae-kaathalae","Kaathalae Kaathalae",[],"'96",2018,["Govind Vasantha"],["Govind Vasantha","Chinmayi","Kalyani Menon"],["Karthik Netha"],"Two old flames meet after decades and ache for the youth they lost."],["song:wd-q30597974:the-life-of-ram-karai-vantha-pirage","The Life of Ram",["Karai Vantha Pirage"],"'96",2018,["Govind Vasantha"],["Pradeep Kumar"],["Karthik Netha","C. Premkumar"],null],["song:wd-q30597974:vasantha-kaalangal","Vasantha Kaalangal",[],"'96",2018,["Govind Vasantha"],["Chinmayi"],["Uma Devi"],null],["song:wd-q30597974:yean","Yean",[],"'96",2018,["Govind Vasantha"],["Gowri T. P."],["Karthik Netha"],null],["song:wd-q3181879:anthimazhai-megam","Anthimazhai Megam",[],"Nayakan",1987,["Ilaiyaraaja"],["S. P. Balasubrahmanyam","P. Susheela"],["Pulamaipithan"],null],["song:wd-q3181879:nee-oru-kaadhal-sangeetham","Nee Oru Kaadhal Sangeetham",[],"Nayakan",1987,["Ilaiyaraaja"],["K. J. Yesudas","K. S. Chithra"],["Pulamaipithan"],null],["song:wd-q3181879:thenpandi-cheemayile","Thenpandi Cheemayile",[],"Nayakan",1987,["Ilaiyaraaja"],["Ilaiyaraaja","Kamal Haasan"],["Pulamaipithan"],"A mournful folk lament for an orphan boy who grew up to be the slum's protector."],["song:wd-q2923057:ale-ale","Ale Ale",[],"Boys",2003,["A. R. Rahman"],["Karthik","Shaan","Chitra Sivaraman"],["Kabilan"],null],["song:wd-q2923057:ayyappo","Ayyappo",[],"Boys",2003,["A. R. Rahman"],["Shankar Mahadevan","Karthik","Chinmayi"],["Vaalee"],null],["song:wd-q2923057:boom-boom","Boom Boom",[],"Boys",2003,["A. R. Rahman"],["A. R. Rahman","Sadhana Sargam","Udit Narayan"],["Vaalee"],null],["song:wd-q2923057:dating","Dating",[],"Boys",2003,["A. R. Rahman"],["Blaaze","Vasundhara Das"],["Pa. Vijay"],null],["song:wd-q2923057:girlfriend","Girlfriend",[],"Boys",2003,["A. R. Rahman"],["Karthik","Tippu","Timmy"],["Pa. Vijay"],null],["song:wd-q2923057:maro-maro-break-the-rules","Maro Maro",["\"Break The Rules\""],"Boys",2003,["A. R. Rahman"],["Karthik","Anupama","Sunitha Sarathy"],["Vaalee"],null],["song:wd-q2923057:please-sir","Please Sir",[],"Boys",2003,["A. R. Rahman"],["Chinmayi","Clinton Cerejo","Kunal Ganjawala"],["Vaalee"],null],["song:wd-q2923057:secret-of-success","Secret of Success",[],"Boys",2003,["A. R. Rahman"],["Blaaze","Shiraz Uppal","Clinton Cerejo"],["Blaaze","Vaalee"],null],["song:wd-q3411584:adadaa-aghangaara-arakka-kaigalil","Adadaa Aghangaara Arakka Kaigalil",[],"Pithamagan",2003,["Ilaiyaraaja"],["K. J. Yesudas"],["Mu. Metha"],null],["song:wd-q3411584:aruna-runaam","Aruna Runaam",[],"Pithamagan",2003,["Ilaiyaraaja"],["P. Susheela","T. M. Soundararajan"],["Alangudi Somu","Ku. Ma. Balasubramaniam","A. Maruthakasi","Kannadasan","Arunagirinathar"],null],["song:wd-q3411584:elangaathu-veesudhey","Elangaathu Veesudhey",[],"Pithamagan",2003,["Ilaiyaraaja"],["Shreya Ghoshal","Sriram Parthasarathy"],["Palani Bharathi"],null],["song:wd-q3411584:kodi-yethi-vaippom","Kodi Yethi Vaippom",[],"Pithamagan",2003,["Ilaiyaraaja"],["Bhavatharini","Shanmugasundari","Harish Raghavendra"],["Na. Muthukumar"],null],["song:wd-q3411584:piraiye-piraiye","Piraiye Piraiye",[],"Pithamagan",2003,["Ilaiyaraaja"],["Madhu Balakrishnan"],["Vaali"],null],["song:wd-q3411584:yaaradhu-yaaradhu","Yaaradhu Yaaradhu",[],"Pithamagan",2003,["Ilaiyaraaja"],["Ilaiyaraaja"],["Na. Muthukumar"],null],["song:wd-q3104859:appadi-podu","Appadi Podu",[],"Ghilli",2004,["Vidyasagar"],["Anuradha Sriram","KK"],["Pa. Vijay"],null],["song:wd-q3104859:arjunaru-villu","Arjunaru Villu",[],"Ghilli",2004,["Vidyasagar"],["Manikka Vinayagam","Sukhwinder Singh"],["Kabilan"],null],["song:wd-q3104859:kabaddi","Kabaddi",[],"Ghilli",2004,["Vidyasagar"],["Maran","Jayamoorty"],["Maran"],null],["song:wd-q3104859:kadhala-kadhala","Kadhala Kadhala",[],"Ghilli",2004,["Vidyasagar"],["Sujatha Mohan"],["P. Vijay"],null],["song:wd-q3104859:kokkarakko","Kokkarakko",[],"Ghilli",2004,["Vidyasagar"],["Sujatha Mohan","Udit Narayan"],["Yugabharathi"],null],["song:wd-q3104859:sha-la-la","Sha La La",[],"Ghilli",2004,["Vidyasagar"],["Sunidhi Chauhan"],["P. Vijay"],null],["song:wd-q3104859:soora-thenga","Soora Thenga",[],"Ghilli",2004,["Vidyasagar"],["Tippu"],["Na. Muthukumar"],null],["song:wd-q1297395:kannum-kannum-nokia","Kannum Kannum Nokia",[],"Anniyan",2005,["Harris Jayaraj"],["Leslie Lewis","Andrea Jeremiah"],["Vairamuthu"],null],["song:wd-q1297395:kumari","Kumari",[],"Anniyan",2005,["Harris Jayaraj"],["Shankar Mahadevan","Harini"],["Vairamuthu"],null],["song:wd-q1297395:randakka","Randakka",[],"Anniyan",2005,["Harris Jayaraj"],["Nakash Aziz","Suchitra"],["Vairamuthu"],null],["song:wd-q2851751:andangkaka","Andangkaka",[],"Anniyan",2005,["Harris Jayaraj"],["Jassie Gift","Shreya Ghoshal","K.K"],["Vairamuthu"],null],["song:wd-q2851751:iyengaaru-veetu","Iyengaaru Veetu",[],"Anniyan",2005,["Harris Jayaraj"],["Harini","Hariharan"],["Vairamuthu"],null],["song:wd-q2851751:kadhal-yaanai","Kadhal Yaanai",[],"Anniyan",2005,["Harris Jayaraj"],["G. V. Prakash Kumar","Nakul","Melwyn Peris"],["Na. Muthukumar"],null],["song:wd-q2851751:stranger-in-black-theme","Stranger in Black",[],"Anniyan",2005,["Harris Jayaraj"],["Sunitha Sarathy","Chennai Chorale"],["Febi","Nina"],null],["song:wd-q1193810:konja-neram","Konja Neram",[],"Chandramukhi",2005,["Vidyasagar"],["Madhu Balakrishnan","Asha Bhosle"],["Yugabharathi"],null],["song:wd-q2737320:oru-maalai","Oru Maalai",[],"Ghajini",2005,["Harris Jayaraj"],["Karthik"],["Thamarai"],null],["song:wd-q2737320:rahathulla","Rahathulla",[],"Ghajini",2005,["Harris Jayaraj"],["Annupamaa"],["Thamarai"],null],["song:wd-q2737320:rangola-ola","Rangola Ola",[],"Ghajini",2005,["Harris Jayaraj"],["Shankar Mahadevan","Ranjith","Sujatha Mohan"],["Kabilan"],null],["song:wd-q2737320:suttum-vizhi","Suttum Vizhi",[],"Ghajini",2005,["Harris Jayaraj"],["Bombay Jayashree","Sriram Parthasarathy"],["Na. Muthukumar"],null],["song:wd-q2737320:x-machi","X Machi",[],"Ghajini",2005,["Harris Jayaraj"],["Nakul","Mathangi"],["Vaali"],null],["song:wd-q6935280:kurangu-kaiyil-maalai","Kurangu Kaiyil Maalai",[],"Mumbai Xpress",2005,["Ilaiyaraaja"],["Kamal Haasan","Tippu"],["Vaali"],null],["song:wd-q6935280:poo-poothadu","Poo Poothadu",[],"Mumbai Xpress",2005,["Ilaiyaraaja"],["Shreya Ghoshal","Sonu Nigam","Shaan"],["Vaali"],null],["song:wd-q6935280:yelae-nee-yetipoo","Yelae Nee Yetipoo",[],"Mumbai Xpress",2005,["Ilaiyaraaja"],["Kamal Haasan","Sunidhi Chauhan","Shreya Ghoshal"],["Vaali"],null],["song:wd-q2907058:kaa-karuppanukkum","Kaa...Karuppanukkum",[],"Dasavathaaram",2008,["Himesh Reshammiya"],["Shalini Singh"],["Vairamuthu"],null],["song:wd-q2907058:kallaimattum-kandal","Kallaimattum Kandal",[],"Dasavathaaram",2008,["Himesh Reshammiya"],["Hariharan"],["Vaalee"],null],["song:wd-q2907058:mukundha-mukundha","Mukundha Mukundha",[],"Dasavathaaram",2008,["Himesh Reshammiya"],["Kamal Haasan","Sadhana Sargam"],["Vaalee"],"A devout woman pours out her devotion to Krishna while the man beside her scoffs at gods."],["song:wd-q2907058:oh-ho-sanam","Oh...Ho...Sanam",[],"Dasavathaaram",2008,["Himesh Reshammiya"],["Kamal Haasan","Himesh Reshammiya","Mahalakshmi Iyer"],["Vairamuthu"],null],["song:wd-q2907058:ulaga-nayagan","Ulaga Nayagan",[],"Dasavathaaram",2008,["Himesh Reshammiya"],["Vinit Singh"],["Vairamuthu"],null],["song:wd-q3522114:anbe-en-anbe","Anbe En Anbe",[],"Dhaam Dhoom",2008,["Harris Jayaraj"],["Harish Raghavendra"],["Na. Muthukumar"],null],["song:wd-q3522114:azhiyilae","Azhiyilae",[],"Dhaam Dhoom",2008,["Harris Jayaraj"],["Hariharan"],["Na. Muthukumar"],null],["song:wd-q3522114:pudhu-pudhu","Pudhu Pudhu",[],"Dhaam Dhoom",2008,["Harris Jayaraj"],["Benny Dayal","Suchitra","Mizta G"],["Pa. Vijay"],null],["song:wd-q3522114:thikku-thikku","Thikku Thikku",[],"Dhaam Dhoom",2008,["Harris Jayaraj"],["Benny Dayal","Sayanora Philip"],["Pa. Vijay"],null],["song:wd-q3522114:uyyaalalo-uyyaalalo","Uyyaalalo Uyyaalalo",[],"Dhaam Dhoom",2008,["Harris Jayaraj"],["Kailash Kher","Sujatha Mohan"],["Pa. Vijay"],null],["song:wd-q3522114:yaaro-manathile","Yaaro Manathile",[],"Dhaam Dhoom",2008,["Harris Jayaraj"],["Krish","Bombay Jayashree"],["Pa. Vijay"],null],["song:wd-q3072954:en-idhayam","En Idhayam",[],"Singam",2010,["Devi Sri Prasad"],["Suchitra","Tippu"],["Na. Muthukumar"],null],["song:wd-q3072954:kadhal-vandhale","Kadhal Vandhale",[],"Singam",2010,["Devi Sri Prasad"],["Baba Sehgal","Priyadarshini"],["Viveka"],null],["song:wd-q3072954:naane-indhiran","Naane Indhiran",[],"Singam",2010,["Devi Sri Prasad"],["Benny Dayal","Manicka Vinayagam"],["Viveka"],null],["song:wd-q3072954:singam","Singam",[],"Singam",2010,["Devi Sri Prasad"],["Devi Sri Prasad"],["Na. Muthukumar","Megha"],null],["song:wd-q3072954:stole-my-heart","Stole My Heart",[],"Singam",2010,["Devi Sri Prasad"],["Shaan","Megha"],["Hari","Viveka"],null],["song:wd-q3471920:balle-lakka","Balle Lakka",[],"Mankatha",2011,["Yuvan Shankar Raja"],["Karthik","Vijay Yesudas","Anusha Durai Dhayanidhi"],["Gangai Amaran"],null],["song:wd-q3471920:machi-open-the-bottle","Machi Open The Bottle",[],"Mankatha",2011,["Yuvan Shankar Raja"],["Karthik","Tippu","Mano"],["Vaalee"],null],["song:wd-q3471920:nanbane","Nanbane",[],"Mankatha",2011,["Yuvan Shankar Raja"],["Yuvan Shankar Raja","Madhushree"],["Vaalee"],null],["song:wd-q3471920:nee-naan","Nee Naan",[],"Mankatha",2011,["Yuvan Shankar Raja"],["Bhavatharini","S. P. B. Charan"],["Niranjan Bharathi"],null],["song:wd-q3471920:vaada-bin-lada","Vaada Bin Lada",[],"Mankatha",2011,["Yuvan Shankar Raja"],["Krish","Suchitra"],["Gangai Amaran","Vaalee"],null],["song:wd-q3471920:vilayaadu-mankatha","Vilayaadu Mankatha",[],"Mankatha",2011,["Yuvan Shankar Raja"],["Yuvan Shankar Raja","Ranjith","Premgi Amaren"],["Yuvan Shankar Raja","Vaalee","Rita"],null],["song:wd-q683308:en-frienda-pola","En Frienda Pola",[],"Nanban",2012,["Harris Jayaraj"],["Krish","Suchith Suresan"],["Viveka"],null],["song:wd-q683308:enthan-kan-munne","Enthan Kan Munne",[],"Nanban",2012,["Harris Jayaraj"],["Aalap Raju"],["Madhan Karky"],null],["song:wd-q683308:heartile-battery","Heartile Battery",[],"Nanban",2012,["Harris Jayaraj"],["Mukesh Mohamed","Hemachandra"],["Na. Muthukumar"],null],["song:wd-q683308:irukana","Irukana",[],"Nanban",2012,["Harris Jayaraj"],["Vijay Prakash","Sunidhi Chauhan","Javed Ali"],["Pa. Vijay"],null],["song:wd-q683308:nalla-nanban","Nalla Nanban",[],"Nanban",2012,["Harris Jayaraj"],["Ramakrishnan Murthy"],["Na. Muthukumar"],null],["song:wd-q654372:dhinakkudha","Dhinakkudha",[],"Pizza",2012,["Santhosh Narayanan"],["Gana Bala"],["Muthamil"],null],["song:wd-q654372:engo-odugindrai","Engo Odugindrai",[],"Pizza",2012,["Santhosh Narayanan"],["Darshana KT","Alphons Joseph"],["Arunraja Kamaraj"],null],["song:wd-q654372:rathiri","Rathiri",[],"Pizza",2012,["Santhosh Narayanan"],["Santhosh Narayanan","Arunraja Kamaraj","Vineeth"],["Arunraja Kamaraj","Vineeth"],null],["song:wd-q3473399:alaikaa-laikka","Alaikaa Laikka",[],"Thuppakki",2012,["Harris Jayaraj"],["Javed Ali","Sayanora Philip","Sharmila"],["Pa. Vijay"],null],["song:wd-q3473399:antarctica","Antarctica",[],"Thuppakki",2012,["Harris Jayaraj"],["Krish","Vijay Prakash","Devan"],["Madhan Karky"],null],["song:wd-q3473399:google-google","Google Google",[],"Thuppakki",2012,["Harris Jayaraj"],["Andrea Jeremiah","Vijay","Krishna Iyer"],["Madhan Karky"],null],["song:wd-q3473399:kutti-puli-kootam","Kutti Puli Kootam",[],"Thuppakki",2012,["Harris Jayaraj"],["Sathyan","Tippu","Narayanan"],["Viveka"],null],["song:wd-q3473399:poi-varava","Poi Varava",[],"Thuppakki",2012,["Harris Jayaraj"],["Karthik","Chinmayi"],["Pa. Vijay"],null],["song:wd-q3473399:vennilave","Vennilave",[],"Thuppakki",2012,["Harris Jayaraj"],["Bombay Jayashri","Hariharan"],["Na. Muthukumar"],null],["song:wd-q3572804:anu-vidhaiththa-boomiyile","Anu Vidhaiththa Boomiyile",[],"Vishwaroopam",2013,["Shankar–Ehsaan–Loy"],["Kamal Haasan","Nikhil D'Souza"],["Kamal Haasan"],null],["song:wd-q3572804:thuppaki-engal-tholile","Thuppaki Engal Tholile",[],"Vishwaroopam",2013,["Shankar–Ehsaan–Loy"],["Kamal Haasan","Benny Dayal"],["VairamuthuEnglish lyrics by Asif Ali Beg"],null],["song:wd-q3572804:unnai-kaanadhu-naan","Unnai Kaanadhu Naan",[],"Vishwaroopam",2013,["Shankar–Ehsaan–Loy"],["Kamal Haasan","Shankar Mahadevan"],["Kamal Haasan"],"A Kathak teacher dances and sings of longing for a divine beloved."],["song:wd-q3572804:vishwaroopam","Vishwaroopam",[],"Vishwaroopam",2013,["Shankar–Ehsaan–Loy"],["Suraj Jagan"],["Vairamuthu"],null],["song:wd-q15912574:aathi","Aathi",[],"Kaththi",2014,["Anirudh Ravichander"],["Anirudh Ravichander","Vishal Dadlani"],["Yugabharathi"],null],["song:wd-q15912574:nee-yaaro","Nee Yaaro",[],"Kaththi",2014,["Anirudh Ravichander"],["K. J. Yesudas"],["Pa. Vijay"],null],["song:wd-q15912574:paalam","Paalam",[],"Kaththi",2014,["Anirudh Ravichander"],["Shankar Mahadevan","Shweta Mohan"],["Madhan Karky"],null],["song:wd-q15912574:pakkam-vanthu","Pakkam Vanthu",[],"Kaththi",2014,["Anirudh Ravichander"],["Anirudh Ravichander","Hiphop Tamizha"],["Hiphop Tamizha"],null],["song:wd-q15912574:selfie-pulla","Selfie Pulla",[],"Kaththi",2014,["Anirudh Ravichander"],["Vijay","Sunidhi Chauhan"],["Madhan Karky"],null],["song:wd-q17075598:aanalum-indha-mayakkam","Aanalum Indha Mayakkam",[],"10 Endrathukulla",2015,["D. Imman"],["Sathya Prakash","Vandhana Srinivasan","Karaoke Version"],["Madhan Karky"],null],["song:wd-q17075598:gaana-gaana","Gaana Gaana",[],"10 Endrathukulla",2015,["D. Imman"],["Shreya Ghoshal","Anand Aravindakshan"],["Madhan Karky"],null],["song:wd-q17075598:pathu-endrathukulla","Pathu Endrathukulla",[],"10 Endrathukulla",2015,["D. Imman"],["Vaikom Vijayalakshmi","Vishal Dadlani","Emcee Jesz"],["Mani Amudhavan"],null],["song:wd-q17075598:vroom-vroom","Vroom Vroom",[],"10 Endrathukulla",2015,["D. Imman"],["D. Imman","Santosh Hariharan","Karaoke Version"],["Madhan Karky"],null],["song:wd-q6936064:moda-moda","Moda Moda",[],"Kanchana 2",2015,["C. Sathya"],["Master Sriman Roshan"],["Viveka"],null],["song:wd-q6936064:motta-paiyaa","Motta Paiyaa",[],"Kanchana 2",2015,["C. Sathya"],["K. S. Chithra","Sooraj Santhosh"],["Viveka"],null],["song:wd-q6936064:om-rudraya-hey","Om Rudraya Hey",[],"Kanchana 2",2015,["C. Sathya"],["Master Sriman Roshan"],["Viveka"],null],["song:wd-q6936064:sandi-muni","Sandi Muni",[],"Kanchana 2",2015,["C. Sathya"],["Leon James","Hariharan"],["Viveka"],null],["song:wd-q6936064:silatta-pilatta","Silatta Pilatta",[],"Kanchana 2",2015,["C. Sathya"],["C. Sathya","Jagadeesh Kumar"],["Logan"],null],["song:wd-q6936064:vaaya-en-veera","Vaaya En Veera",[],"Kanchana 2",2015,["C. Sathya"],["Shakthisree Gopalan"],["Ko. Sesha"],null],["song:wd-q23925031:chalmaar","Chalmaar",[],"Devi",2016,["Sajid-Wajid"],["Benny Dayal"],["Na. Muthukumar"],null],["song:wd-q23925031:kokka-makka","Kokka Makka",[],"Devi",2016,["Sajid-Wajid"],["Shivranjani Singh"],["Na. Muthukumar"],null],["song:wd-q23925031:pesamal-pesi-parthen","Pesamal Pesi Parthen",[],"Devi",2016,["Sajid-Wajid"],["Karthik"],["Na. Muthukumar"],null],["song:wd-q3537634:chinna-thayaval","Chinna Thayaval",[],"Thalapathi",1991,["Ilaiyaraaja"],["S. Janaki"],["Vaali"],"A young mother's lament for the baby she was forced to give away."],["song:wd-q3537634:rakkamma-kaiya-thattu","Rakkamma Kaiya Thattu",[],"Thalapathi",1991,["Ilaiyaraaja"],["S. P. Balasubrahmanyam","Swarnalatha"],["Vaali"],"Two inseparable friends lead a rowdy street-festival dance."],["song:wd-q3537634:sundari-kannal-oru-sethi","Sundari Kannal Oru Sethi",[],"Thalapathi",1991,["Ilaiyaraaja"],["S. P. Balasubrahmanyam","S. Janaki"],["Vaali"],null],["song:wd-q20900127:bagai-sungai-maya","Bagai Sungai Maya",[],"Kabali",2016,["Santhosh Narayanan"],["Arvind Raj","Dasha Logan"],["R.Zubair"],null],["song:wd-q20900127:maya-nadhi","Maya Nadhi",[],"Kabali",2016,["Santhosh Narayanan"],["Ananthu","Shweta Mohan","Pradeep Kumar"],["Uma Devi K"],"An ageing don dreams of the wife he believes he lost years ago."],["song:wd-q20900127:neruppu-da","Neruppu Da",[],"Kabali",2016,["Santhosh Narayanan"],["Arunraja Kamaraj","Rajinikanth"],["Arunraja Kamaraj"],"An entry anthem for an ageing gangster walking out of prison, all swagger and smoke."],["song:wd-q20900127:thoondil-meen","Thoondil Meen",[],"Kabali",2016,["Santhosh Narayanan"],["Dhee","Pradeep Kumar","Kalyani Nair"],["Kabilan"],null],["song:wd-q20900127:ulagam-oruvanukka","Ulagam Oruvanukka",[],"Kabali",2016,["Santhosh Narayanan"],["Ananthu","Santhosh Narayanan","Roshan Jamrock"],["Kabilan","Roshan Jamrock","Vivek"],null],["song:wd-q20900127:vaanam-paarthen","Vaanam Paarthen",[],"Kabali",2016,["Santhosh Narayanan"],["Pradeep Kumar"],["Kabilan"],null],["song:wd-q20900127:veera-thurandhara","Veera Thurandhara",[],"Kabali",2016,["Santhosh Narayanan"],["Roshan Jamrock","Pradeep Kumar","Gana Bala"],["Roshan Jamrock","Umadevi"],null],["song:wd-q20814887:chella-kutti","Chella Kutti",[],"Theri",2016,["G. V. P. Prakash Kumar"],["Vijay","Neeti Mohan"],["Kabilan"],null],["song:wd-q20814887:dub-theri-step","Dub Theri Step",[],"Theri",2016,["G. V. P. Prakash Kumar"],["Arunraja Kamaraj"],["Arunraja Kamaraj"],null],["song:wd-q20814887:eena-meena-teeka","Eena Meena Teeka",[],"Theri",2016,["G. V. P. Prakash Kumar"],["G. V. Prakash Kumar","Uthara Unnikrishnan"],["Pa. Vijay"],"A little girl's playful song with her doting father, a baker hiding a past."],["song:wd-q20814887:en-jeevan","En Jeevan",[],"Theri",2016,["G. V. P. Prakash Kumar"],["Vaikom Vijayalakshmi","Saindhavi","Hariharan"],["Na. Muthukumar"],null],["song:wd-q20814887:hey-aasman","Hey Aasman",[],"Theri",2016,["G. V. P. Prakash Kumar"],["Yash Golcha"],["Vishal Chandrashekhar"],null],["song:wd-q20814887:jithu-jilladi","Jithu Jilladi",[],"Theri",2016,["G. V. P. Prakash Kumar"],["Deva","Balachandran"],["Rokesh"],null],["song:wd-q20814887:raangu","Raangu",[],"Theri",2016,["G. V. P. Prakash Kumar"],["T. Rajendar","G. V. Prakash Kumar","Sonu Kakkar"],["Kabilan"],null],["song:wd-q20814887:thaimai","Thaimai",[],"Theri",2016,["G. V. P. Prakash Kumar"],["Bombay Jayashri"],["Pulamaipithan"],null],["song:wd-q21647283:azhagiya-soodana-poovey","Azhagiya Soodana Poovey",[],"Bairavaa",2017,["Santhosh Narayanan"],["Vijaynarain","Darshana KT"],["Vairamuthu"],null],["song:wd-q21647283:nilaayo","Nilaayo",[],"Bairavaa",2017,["Santhosh Narayanan"],["Hariharan"],["Vairamuthu"],null],["song:wd-q21647283:pa-pa","Pa Pa",[],"Bairavaa",2017,["Santhosh Narayanan"],["Vijay","Priyadarshini"],["Vairamuthu"],null],["song:wd-q21647283:pattaya-kelappu","Pattaya Kelappu",[],"Bairavaa",2017,["Santhosh Narayanan"],["Ananthu","Benny Dayal"],["Vairamuthu"],null],["song:wd-q21647283:varlaam-vaarlam-vaa-bairavaa","Varlaam Vaarlam Vaa Bairavaa",[],"Bairavaa",2017,["Santhosh Narayanan"],["Arunraja Kamaraj","Roshan Jamrock"],["Arunraja Kamaraj","Roshan Jamrock"],null],["song:wd-q24034515:it-s-a-story","It's a Story",[],"Maanagaram",2017,["Javed Riaz"],["Sharanya Gopinath"],["Anthony Faze"],null],["song:wd-q21095433:endhira-logathu-sundariye","Endhira Logathu Sundariye",[],"2.0",2018,["A. R. Rahman","Ilaiyaraaja"],["Sid Sriram","Shashaa Tirupati"],["Madhan Karky"],null],["song:wd-q21095433:pullinangal","Pullinangal",[],"2.0",2018,["A. R. Rahman","Ilaiyaraaja"],["Bamba Bakya","A. R. Ameen","Suzanne D'Mello"],["Na. Muthukumar"],null],["song:wd-q21095433:raajali","Raajali",[],"2.0",2018,["A. R. Rahman","Ilaiyaraaja"],["Sid Sriram","Blaaze","Arjun Chandy"],["Madhan Karky"],null],["song:wd-q30048306:kannamma","Kannamma",[],"Kaala",2018,["Santhosh Narayanan"],["Ananthu","Dhee","Pradeep Kumar"],["Umadevi"],null],["song:wd-q30048306:katravai-patravai","Katravai Patravai",[],"Kaala",2018,["Santhosh Narayanan"],["Arunraja Kamaraj","Yogi B","Roshan Jamrock"],["Arunraja Kamaraj","Kabilan","Roshan Jamrock"],null],["song:wd-q30048306:nikkal-nikkal","Nikkal Nikkal",[],"Kaala",2018,["Santhosh Narayanan"],["Arunraja Kamaraj","Vivek","Dopeadelicz"],["Logan","Dopeadelicz"],null],["song:wd-q30048306:poraaduvom","Poraaduvom",[],"Kaala",2018,["Santhosh Narayanan"],["Dopeadelicz"],["Logan","Dopeadelicz"],null],["song:wd-q30048306:semma-weightu","Semma Weightu",[],"Kaala",2018,["Santhosh Narayanan"],["Santhosh Narayanan","Arunraja Kamaraj","Hariharasudhan"],["Arunraja Kamaraj","Dopeadelicz"],"A Dharavi slum boss gets a street-rap introduction."],["song:wd-q30048306:thanga-sela","Thanga Sela",[],"Kaala",2018,["Santhosh Narayanan"],["Ananthu","Shankar Mahadevan","Pradeep Kumar"],["Arunraja Kamaraj"],null],["song:wd-q30048306:theruvilakku","Theruvilakku",[],"Kaala",2018,["Santhosh Narayanan"],["Muthamil","Dopeadelicz"],["Logan","Dopeadelicz"],null],["song:wd-q30048306:urimayai-meetpom","Urimayai Meetpom",[],"Kaala",2018,["Santhosh Narayanan"],["Ananthu","Vijay Prakash"],["Arivu"],null],["song:wd-q50825957:anbe-peranbe","Anbe Peranbe",[],"NGK",2018,["Yuvan Shankar Raja"],["Shreya Ghoshal","Sid Sriram"],["Uma Devi"],null],["song:wd-q50825957:pothachaalum","Pothachaalum",[],"NGK",2018,["Yuvan Shankar Raja"],["Shivam"],["Selvaraghavan"],null],["song:wd-q50825957:thandalkaaran","Thandalkaaran",[],"NGK",2018,["Yuvan Shankar Raja"],["Ranjith"],["Kabilan"],null],["song:wd-q50825957:thimiranumda","Thimiranumda",[],"NGK",2018,["Yuvan Shankar Raja"],["Jithin Raj"],["Vignesh Shivan"],null],["song:wd-q23838204:adadaa-naana","Adadaa Naana",[],"Enai Noki Paayum Thota",2019,["Yuvan Shankar Raja"],["Nakul Abhyankar"],["Thamizhanangu"],null],["song:wd-q23838204:hey-nijame","Hey Nijame",[],"Enai Noki Paayum Thota",2019,["Yuvan Shankar Raja"],["Bombay Jayashri"],["Madhan Karky"],null],["song:wd-q23838204:maruvaarthai","Maruvaarthai",[],"Enai Noki Paayum Thota",2019,["Yuvan Shankar Raja"],["Sid Sriram"],["Thamarai"],null],["song:wd-q23838204:naan-pizhaippeno","Naan Pizhaippeno",[],"Enai Noki Paayum Thota",2019,["Yuvan Shankar Raja"],["D. Sathyaprakash"],["Thamarai"],null],["song:wd-q23838204:poi-varavaa","Poi Varavaa",[],"Enai Noki Paayum Thota",2019,["Yuvan Shankar Raja"],["Bombay Jayashri"],["Madhan Karky"],null],["song:wd-q23838204:thirudaadhe-thirudaadhe","Thirudaadhe Thirudaadhe",[],"Enai Noki Paayum Thota",2019,["Yuvan Shankar Raja"],["Karthik","Darbuka Siva","Jonita Gandhi"],["Thamarai","Aaryan Dinesh Kanagaratnam"],null],["song:wd-q23838204:visiri","Visiri",[],"Enai Noki Paayum Thota",2019,["Yuvan Shankar Raja"],["Sid Sriram","Shashaa Tirupati"],["Thamarai"],null],["song:wd-q55784446:hey-amigo","Hey Amigo",[],"Kaappaan",2019,["Harris Jayaraj"],["Jonita Gandhi","Leslee Lewis"],["Vairamuthu"],null],["song:wd-q55784446:kurilae-kurilae","Kurilae Kurilae",[],"Kaappaan",2019,["Harris Jayaraj"],["Javed Ali","Darshana KT"],["Kabilan"],null],["song:wd-q55784446:machan-inga-vandhira","Machan Inga Vandhira",[],"Kaappaan",2019,["Harris Jayaraj"],["Nikhita Gandhi","Kharesma Ravichandran","Shabnam Muthu Munas"],["Gk","Kabilan Vairamuthu"],null],["song:wd-q55784446:siriki","Siriki",[],"Kaappaan",2019,["Harris Jayaraj"],["Senthil Ganesh","Rockstar Ramani Ammal"],["S. Gnanakaravel"],null],["song:wd-q55784446:vinnil-vinmeen","Vinnil Vinmeen",[],"Kaappaan",2019,["Harris Jayaraj"],["Nikitha Harris"],["Vairamuthu"],null],["song:wd-q63135778:aagasam","Aagasam",[],"Soorarai Pottru",2020,["G. V. P. Prakash Kumar"],["Govind Vasantha","Christin Jos"],["Arunraja Kamaraj"],null],["song:wd-q63135778:kaattu-payale","Kaattu Payale",[],"Soorarai Pottru",2020,["G. V. P. Prakash Kumar"],["Dhee"],["Snehan"],"A woman sings, half-teasing, about the stubborn, untamed man she has chosen."],["song:wd-q63135778:kaiyiley-aagasam","Kaiyiley Aagasam",[],"Soorarai Pottru",2020,["G. V. P. Prakash Kumar"],["Saindhavi"],["Yugabharathi"],null],["song:wd-q63135778:mannurunda","Mannurunda",[],"Soorarai Pottru",2020,["G. V. P. Prakash Kumar"],["Senthil Ganesh"],["Ekadasi"],null],["song:wd-q63135778:naalu-nimisham","Naalu Nimisham",[],"Soorarai Pottru",2020,["G. V. P. Prakash Kumar"],["Krishnaraj"],["Maya Mahalingam"],null],["song:wd-q63135778:sooravalli","Sooravalli",[],"Soorarai Pottru",2020,["G. V. P. Prakash Kumar"],["Senthil Ganesh"],["Ekadesi"],null],["song:wd-q63135778:usurey","Usurey",[],"Soorarai Pottru",2020,["G. V. P. Prakash Kumar"],["G. V. Prakash Kumar"],["Maya Mahalingam"],null],["song:wd-q63135778:veyyon-silli","Veyyon Silli",[],"Soorarai Pottru",2020,["G. V. P. Prakash Kumar"],["Harish Sivaramakrishnan"],["Vivek"],null],["song:wd-q108376991:manniley-eeramundu","Manniley Eeramundu",[],"Jai Bhim",2021,["Sean Roldan"],["Vaikom Vijayalakshmi"],["Yugabharathi"],null],["song:wd-q108376991:polladha-ulagathiley","Polladha Ulagathiley",[],"Jai Bhim",2021,["Sean Roldan"],["Sean Roldan"],["Yugabharathi"],null],["song:wd-q108376991:power","Power",[],"Jai Bhim",2021,["Sean Roldan"],["Arivu"],["Arivu"],null],["song:wd-q108376991:sendumalli","Sendumalli",[],"Jai Bhim",2021,["Sean Roldan"],["Ananthu","Kalyani Nair"],["Yugabharathi"],null],["song:wd-q108376991:thala-kodhum","Thala Kodhum",[],"Jai Bhim",2021,["Sean Roldan"],["Pradeep Kumar"],["Raju Murugan"],null],["song:wd-q108376991:vettakaara-kootam","Vettakaara Kootam",[],"Jai Bhim",2021,["Sean Roldan"],["Anthony Daasan","Niranjana Ramanan"],["Yugabharathi"],null],["song:wd-q105474747:kandaa-vara-sollunga","Kandaa Vara Sollunga",[],"Karnan",2021,["Santhosh Narayanan"],["Santhosh Narayanan","Kidakkuzhi Mariyammal"],["Mari Selvaraj"],null],["song:wd-q105474747:thattaan-thattaan","Thattaan Thattaan",[],"Karnan",2021,["Santhosh Narayanan"],["Dhanush","Meenakshi Ilayaraja"],["Yugabharathi"],null],["song:wd-q105474747:uttradheenga-yeppov","Uttradheenga Yeppov",[],"Karnan",2021,["Santhosh Narayanan"],["Santhosh Narayanan","Dhee"],["Mari Selvaraj"],null],["song:wd-q105474747:yen-aalu-manjanathi","Yen Aalu Manjanathi",[],"Karnan",2021,["Santhosh Narayanan"],["Deva","Santhosh Narayanan","Reetha Anthony"],["Yugabharathi"],null],["song:wd-q83490910:andha-kanna-paathaakaa","Andha Kanna Paathaakaa",[],"Master",2021,["Anirudh Ravichander"],["Yuvan Shankar Raja"],["Vignesh Shivan"],null],["song:wd-q83490910:kutti-story","Kutti Story",[],"Master",2021,["Anirudh Ravichander"],["Anirudh Ravichander","Vijay"],["Arunraja Kamaraj"],"The hero, in his own voice, gives a pep talk: ignore the haters and stay calm."],["song:wd-q83490910:master-the-blaster","Master the Blaster",[],"Master",2021,["Anirudh Ravichander"],["Bjorn Surrao"],["Bjorn Surrao"],null],["song:wd-q83490910:polakattum-para-para","Polakattum Para Para",[],"Master",2021,["Anirudh Ravichander"],["Santhosh Narayanan"],["Vishnu Edavan"],null],["song:wd-q83490910:pona-pogattum","Pona Pogattum",[],"Master",2021,["Anirudh Ravichander"],["C. B. Vinith"],["Vishnu Edavan"],null],["song:wd-q83490910:quit-pannuda","Quit Pannuda",[],"Master",2021,["Anirudh Ravichander"],["Anirudh Ravichander"],["Vignesh Shivan"],null],["song:wd-q83490910:vaathi-coming","Vaathi Coming",[],"Master",2021,["Anirudh Ravichander"],["Anirudh Ravichander","Gana Balachandar"],["Gana Balachandar"],"A gaana floor-filler announcing that the hero has arrived, hands in pockets."],["song:wd-q83490910:vaathi-kabaddi","Vaathi Kabaddi",[],"Master",2021,["Anirudh Ravichander"],["Maran","Jayamoorthy"],["Pa. Vijay"],null],["song:wd-q83490910:vaathi-raid","Vaathi Raid",[],"Master",2021,["Anirudh Ravichander"],["Anirudh Ravichander","Arivu"],["Arivu"],null],["song:wd-q107304843:arabic-kuthu","Arabic Kuthu",[],"Beast",2022,["Anirudh Ravichander"],["Anirudh Ravichander","Jonita Gandhi"],["Sivakarthikeyan"],"A dance number stuffed with mock Middle-Eastern gibberish that took over every wedding."],["song:wd-q107304843:halamithi-habibo-lofi-version","Halamithi Habibo",[],"Beast",2022,["Anirudh Ravichander"],["Anirudh Ravichander","Jonita Gandhi","KS Abhishek"],["Sivakarthikeyan"],null],["song:wd-q108940413:alaikadal","Alaikadal",[],"Ponniyin Selvan: I",2022,[],["Antara Nandy"],["Siva Ananth"],null],["song:wd-q108940413:chola-chola","Chola Chola",[],"Ponniyin Selvan: I",2022,[],["Sathya Prakash","V. M. Mahalingam","Nakul Abhyankar"],["Siva Ananth"],null],["song:wd-q108940413:devaralan-attam","Devaralan Attam",[],"Ponniyin Selvan: I",2022,[],["Yogi Sekar"],["Ilango Krishnan"],null],["song:wd-q108940413:ponni-nadhi","Ponni Nadhi",[],"Ponniyin Selvan: I",2022,[],["A. R. Rahman","Bamba Bakya","A. R. Raihanah"],["Kabilan"],"A carefree horseman rides through the rich delta country, singing to the river that feeds it."],["song:wd-q108940413:ratchasa-maamaney","Ratchasa Maamaney",[],"Ponniyin Selvan: I",2022,[],["Shreya Ghoshal","Palakkad Sreeram","Mahesh Vinayakram"],["Kabilan"],null],["song:wd-q108940413:sol","Sol",[],"Ponniyin Selvan: I",2022,[],["Rakshita Suresh","Krithika Nelson"],["Ilango Krishnan","Krithika Nelson"],null],["song:wd-q102147285:pathala-pathala","Pathala Pathala",[],"Vikram",2022,["Anirudh Ravichander"],["Kamal Haasan","Anirudh Ravichander"],["Kamal Haasan"],"The hero, in his own voice, sings a street-gaana jab at politics and corruption."],["song:wd-q102147285:porkanda-singam","Porkanda Singam",[],"Vikram",2022,["Anirudh Ravichander"],["Ravi G"],["Vishnu Edavan"],"A gruff man sings a lullaby to his infant grandson amid all the violence."],["song:wd-q102147285:vikram-title-track","Vikram Title Track",[],"Vikram",2022,["Anirudh Ravichander"],["Anirudh Ravichander"],["Vishnu Edavan"],null],["song:wd-q102147287:once-upon-a-time","Once Upon A Time",[],"Vikram",2022,["Anirudh Ravichander"],["Anirudh Ravichander"],["Heisenberg"],null],["song:wd-q102147287:vikram","Vikram",[],"Vikram",2022,["Anirudh Ravichander"],["Anirudh Ravichander"],["Vishnu Edavan"],null],["song:wd-q102147287:wasted","Wasted",[],"Vikram",2022,["Anirudh Ravichander"],["Anirudh Ravichander"],["Heisenberg"],null],["song:wd-q113625011:hukum-thalaivar-alappara","Hukum – Thalaivar Alappara",[],"Jailer",2023,[],["Anirudh Ravichander","Rajinikanth"],["Super Subu"],null],["song:wd-q113625011:jujubee","Jujubee",[],"Jailer",2023,[],["Anirudh Ravichander","Dhee","Anantha Krishnan"],["Super Subu"],null],["song:wd-q113625011:kaavaalaa","Kaavaalaa",[],"Jailer",2023,[],["Shilpa Rao"],["Arunraja Kamaraj"],"A glamorous party number whose hook step became a reels craze."],["song:wd-q113625011:rathamaarey","Rathamaarey",[],"Jailer",2023,[],["Vishal Mishra"],["Vignesh Shivan"],null],["song:wd-q116536092:anbenum","Anbenum",[],"Leo",2023,["Anirudh Ravichander"],["Anirudh Ravichander","Lothika"],["Vishnu Edavan"],null],["song:wd-q116536092:bloody-sweet","Bloody Sweet",[],"Leo",2023,["Anirudh Ravichander"],["Anirudh Ravichander","Siddharth Basrur"],["Heisenberg"],null],["song:wd-q116536092:i-m-scared","I'm Scared",[],"Leo",2023,["Anirudh Ravichander"],["Anirudh Ravichander"],["Heisenberg"],null],["song:wd-q116536092:leo-das-entry","Leo Das Entry",[],"Leo",2023,["Anirudh Ravichander"],["Anirudh Ravichander"],["Heisenberg"],null],["song:wd-q116536092:ordinary-person","Ordinary Person",[],"Leo",2023,["Anirudh Ravichander"],["Nikhita Gandhi"],["Heisenberg"],null],["song:wd-q116536092:villain-yaaru","Villain Yaaru",[],"Leo",2023,["Anirudh Ravichander"],["Anirudh Ravichander","Shakthisree Gopalan"],["Vishnu Edavan"],null],["song:wd-q16246864:ayalaa-ayalaa","Ayalaa Ayalaa",[],"Ayalaan",2024,[],["A. R. Rahman","Naresh Iyer","Hriday Gattani"],["Vivek"],null],["song:wd-q16246864:chella-rangi","Chella Rangi",[],"Ayalaan",2024,[],["Shashaa Tirupati","Sanjith Hegde"],["Krithika Nelson"],null],["song:wd-q16246864:maanja-nee","Maanja Nee",[],"Ayalaan",2024,[],["A. R. Rahman","A. R. Ameen"],["A. R. Rahman","Sivakarthikeyan","thoughtsfornow"],null],["song:wd-q16246864:suro-suro","Suro Suro",[],"Ayalaan",2024,[],["Nakul Abhyankar","Mohit Chauhan"],["Madhan Karky"],null],["song:wd-q16246864:vera-level-sago","Vera Level Sago",[],"Ayalaan",2024,[],["A. R. Rahman"],["Vivek"],null],["song:wd-q60737510:calendar-song","Calendar Song",[],"Indian 2",2024,["Anirudh Ravichander"],["SuVi","Aishwarya Suresh"],["Kabilan Vairamuthu"],null],["song:wd-q60737510:come-back-indian","Come Back Indian",[],"Indian 2",2024,["Anirudh Ravichander"],["Anirudh Ravichander"],["Arivu"],null],["song:wd-q60737510:kadharalz","Kadharalz",[],"Indian 2",2024,["Anirudh Ravichander"],["Anirudh Ravichander"],["Rokesh"],null],["song:wd-q60737510:neelorpam","Neelorpam",[],"Indian 2",2024,["Anirudh Ravichander"],["Shruthika Samudhrala","Abby V"],["Thamarai"],null],["song:wd-q60737510:paaraa","Paaraa",[],"Indian 2",2024,["Anirudh Ravichander"],["Anirudh Ravichander","Shruthika Samudhrala"],["Pa. Vijay"],null],["song:wd-q60737510:zaga-zaga","Zaga Zaga",[],"Indian 2",2024,["Anirudh Ravichander"],["Anirudh Ravichander"],["Anirudh Ravichander"],null],["song:wd-q126595889:raja-paya-onnu","Raja Paya Onnu",[],"Maharaja",2024,[],["Jithin Raj","Harshika Devanath"],["Vairamuthu"],null],["song:wd-q126595889:thayee-thayee","Thayee Thayee",[],"Maharaja",2024,[],["Sid Sriram"],["Vairamuthu"],null],["song:wd-q3100958:chikku-bukku-rayile","Chikku Bukku Rayile",[],"Gentleman",1993,["A. R. Rahman"],["Suresh Peters","G. V. Prakash Kumar"],["Vaali"],null],["song:wd-q3100958:en-veetu-thotathil","En Veetu Thotathil",[],"Gentleman",1993,["A. R. Rahman"],["S. P. Balasubrahmanyam","Sujatha Mohan"],["Vairamuthu"],null],["song:wd-q3100958:ottagathai-kattiko","Ottagathai Kattiko",[],"Gentleman",1993,["A. R. Rahman"],["S. P. Balasubrahmanyam","Minmini","Sujatha Mohan"],["Vairamuthu"],null],["song:wd-q3100958:parkathey","Parkathey",[],"Gentleman",1993,["A. R. Rahman"],["Srinivas","Minmini","Noel James"],["Vairamuthu"],null],["song:wd-q3100958:usalampatti-penkutti","Usalampatti Penkutti",[],"Gentleman",1993,["A. R. Rahman"],["Shahul Hameed","Swarnalatha"],["Vairamuthu"],null],["song:wd-q3191772:aathile-annakili","Aathile Annakili",[],"Kadhalan",1994,["A. R. Rahman"],["Arunmozhi"],["Panchu Arunachalam"],null],["song:wd-q3191772:adi-pandalile","Adi Pandalile",[],"Kadhalan",1994,["A. R. Rahman"],["Mano"],["Panchu Arunachalam"],null],["song:wd-q3191772:konji-konji","Konji Konji",[],"Kadhalan",1994,["A. R. Rahman"],["S. P. Balasubrahmanyam","K. S. Chithra"],["Panchu Arunachalam"],null],["song:wd-q3191772:maadethile-kanni","Maadethile Kanni",[],"Kadhalan",1994,["A. R. Rahman"],["S. P. Balasubrahmanyam","Swarnalatha"],["Vaali"],null],["song:wd-q3191772:malai-kovil-vaasalil","Malai Kovil Vaasalil",[],"Kadhalan",1994,["A. R. Rahman"],["Mano","Swarnalatha"],["Vaali"],null],["song:wd-q3191772:pattu-poo-poo","Pattu Poo Poo",[],"Kadhalan",1994,["A. R. Rahman"],["K. S. Chithra"],["Vaali"],null],["song:wd-q3191772:thirumagal","Thirumagal",[],"Kadhalan",1994,["A. R. Rahman"],["Arunmozhi"],["Ilaiyaraaja"],null],["song:wd-q3191772:vaadi-vethalai","Vaadi Vethalai",[],"Kadhalan",1994,["A. R. Rahman"],["Mano","K. S. Chithra"],["Vaali"],null],["song:wd-q891821:antha-arabic-kadaloram-humma-humma","Antha Arabic Kadaloram",["Humma Humma"],"Bombay",1995,["A. R. Rahman"],["Swarnalatha","A. R. Rahman","Suresh Peters"],["Vaali"],null],["song:wd-q891821:idhu-annai-bhoomi","Idhu Annai Bhoomi",[],"Bombay",1995,["A. R. Rahman"],["Srinivas","Sujatha Mohan","Noel James"],["Vairamuthu"],null],["song:wd-q891821:kannalanae","Kannalanae",[],"Bombay",1995,["A. R. Rahman"],["K. S. Chithra","A. R. Rahman","Reshmi"],["Vairamuthu"],"At a family wedding, a young woman in a veil keeps stealing glances at the man she loves."],["song:wd-q891821:kuchi-kuchi-rakamma","Kuchi Kuchi Rakamma",[],"Bombay",1995,["A. R. Rahman"],["Swarnalatha","Shweta Mohan","G. V. Prakash Kumar"],["Vairamuthu"],null],["song:wd-q891821:malarodu-malaringu","Malarodu Malaringu",[],"Bombay",1995,["A. R. Rahman"],["Sujatha Mohan","Anuradha Sriram"],["Vairamuthu"],null],["song:wd-q891821:poovukkenna-poottu-halla-gulla","Poovukkenna Poottu",["Halla Gulla"],"Bombay",1995,["A. R. Rahman"],["Srinivas","S. P. Pallavi","Noel James"],["Vaali"],null],["song:wd-q891821:uyire-uyire-raga-charukeshi","Uyire Uyire",[],"Bombay",1995,["A. R. Rahman"],["K. S. Chithra","Hariharan"],["Vairamuthu"],"Separated lovers race to find each other at an old seaside fort as the rain pours."],["song:wd-q1723681:enna-solla-pogirai","Enna Solla Pogirai",[],"Kandukondain Kandukondain",2000,["A. R. Rahman"],["Shankar Mahadevan"],["Vairamuthu"],null],["song:wd-q1723681:kandukondain-kandukondain","Kandukondain Kandukondain",[],"Kandukondain Kandukondain",2000,["A. R. Rahman"],["Mahalakshmi Iyer","Hariharan"],["Vairamuthu"],null],["song:wd-q1723681:kannamoochi-yenada","Kannamoochi Yenada",[],"Kandukondain Kandukondain",2000,["A. R. Rahman"],["K. J. Yesudas","K. S. Chithra"],["Vairamuthu"],null],["song:wd-q1723681:konjum-mainakkale","Konjum Mainakkale",[],"Kandukondain Kandukondain",2000,["A. R. Rahman"],["Sadhana Sargam"],["Vairamuthu"],null],["song:wd-q1723681:smayiyai","Smayiyai",[],"Kandukondain Kandukondain",2000,["A. R. Rahman"],["Devan Ekambaram","Clinton Cerejo","Dominique Cerejo"],["Vairamuthu"],null],["song:wd-q1723681:suttum-vizhi","Suttum Vizhi",[],"Kandukondain Kandukondain",2000,["A. R. Rahman"],["Hariharan"],["Subramania Bharati"],null],["song:wd-q1723681:yengae-enathu-kavithai","Yengae Enathu Kavithai",[],"Kandukondain Kandukondain",2000,["A. R. Rahman"],["K. S. Chithra","Unni Menon"],["Vairamuthu"],null],["song:wd-q3424207:aalavandhan","Aalavandhan",[],"Aalavandhan",2001,["Shankar Mahadevan"],["Shankar Mahadevan"],["Vairamuthu"],null],["song:wd-q3424207:africa-kaattu-puli","Africa Kaattu Puli",[],"Aalavandhan",2001,["Shankar Mahadevan"],["Nandini Srikar"],["Vaali"],null],["song:wd-q3424207:kadavul-paadhi","Kadavul Paadhi",[],"Aalavandhan",2001,["Shankar Mahadevan"],["Kamal Haasan","Nandini"],["Vaali"],null],["song:wd-q3424207:siri-siri","Siri Siri",[],"Aalavandhan",2001,["Shankar Mahadevan"],["Kamal Haasan","Mahalakshmi Iyer"],["Vairamuthu"],null],["song:wd-q3424207:un-azhagukku","Un Azhagukku",[],"Aalavandhan",2001,["Shankar Mahadevan"],["Shankar Mahadevan","Sujatha Mohan"],["Vairamuthu"],null]]};
+const R = DATA.game.rules;
+const { $, esc } = Kit;
+const show = Kit.screens(["start", "round", "reveal", "end"]);
+const SONGS = DATA.songs.map(([id, title, aliases, film, year, music, singers, lyricists, gist]) => ({ id, title, aliases, film, year, music, singers, lyricists, gist }));
+
+// ---------- spelling-tolerant matching ----------
+// Tamil in English letters has many spellings (Kaadhal / Kadhal / Kathal, Uyire / Uyirey). Fold the common
+// variants to one form, then allow a small edit distance.
+function fold(s) {
+  return (s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase()
+    .replace(/[^a-z]/g, "")
+    .replace(/zh/g, "l").replace(/([ktdpbcgs])h/g, "$1").replace(/w/g, "v").replace(/ey$/, "e").replace(/ee/g, "i").replace(/oo/g, "u")
+    // Tamil script has one letter for each of these pairs, so English spellings swap them freely.
+    .replace(/d/g, "t").replace(/g/g, "k").replace(/b/g, "p").replace(/ae/g, "e").replace(/ay$/, "ai")
+    .replace(/(.)\1+/g, "$1");
+}
+function dist(a, b) {
+  const m = a.length, n = b.length, d = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    let prev = d[0]; d[0] = i;
+    for (let j = 1; j <= n; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = t; }
+  }
+  return d[n];
+}
+const sim = (a, b) => (a && b) ? 1 - dist(a, b) / Math.max(a.length, b.length) : 0;
+// Best similarity of a guess to a song: the title, its other names, or its opening words (songs go by their first words).
+function score(guess, s) {
+  const g = fold(guess); if (g.length < 3) return 0;
+  const names = [s.title, ...s.aliases];
+  const words = s.title.split(/\s+/);
+  if (words.length > 2) names.push(words.slice(0, 2).join(" "), words.slice(0, 3).join(" "));
+  // The first sound must agree: Kadhala Kadhala is not Pathala Pathala, however close the rest is.
+  return Math.max(...names.map((n) => { const f = fold(n); return f[0] === g[0] ? sim(g, f) : 0; }));
+}
+
+// ---------- start ----------
+let mode = "story", queue = [], round = 0, total = 0, history = [], cur = null, open = 0;
+const pool = () => SONGS.filter((s) => mode === "buff" || s.gist);
+function paintStart() {
+  const p = pool();
+  $("btn-start").textContent = `Play ${Math.min(R.rounds, p.length)} songs`;
+  $("mode-note").textContent = mode === "story"
+    ? "Opens with a one-line story about the song, in our own words. Then the music, the voices, the film."
+    : "No story. Music director and year, lyricist, singers, film. For people who read the album credits.";
+  const films = new Set(SONGS.map((s) => s.film)).size;
+  $("pool-line").textContent = `${p.length} songs in this mode · ${SONGS.length} songs from ${films} films in all`;
+}
+document.querySelectorAll(".seg button").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll(".seg button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+  mode = b.dataset.mode; paintStart();
+}));
+
+// ---------- round ----------
+const join = (xs) => xs.length > 1 ? xs.slice(0, -1).join(", ") + " and " + xs.at(-1) : xs[0] || "";
+function clues(s) {
+  const music = { k: "Music", v: `${join(s.music) || "Unknown"}${s.year ? ` · ${s.year}` : ""}` };
+  const voices = { k: "Sung by", v: join(s.singers) || "Unknown" };
+  const film = { k: "From the film", v: s.film };
+  return mode === "story" && s.gist
+    ? [{ k: "What it's about", v: s.gist, story: true }, music, voices, film]
+    : [music, { k: "Lyrics by", v: join(s.lyricists) }, voices, film];
+}
+const clock = Kit.countdown({ ring: $("t-ring"), text: $("t-text"), onEnd: () => finish("time") });
+
+function startGame() {
+  queue = pool().slice().sort(() => Math.random() - 0.5).slice(0, R.rounds);
+  round = 0; total = 0; history = [];
+  $("r-total").textContent = $("v-total").textContent = queue.length;
+  next();
+}
+function next() {
+  if (round >= queue.length) return end();
+  cur = queue[round++]; open = 1;
+  $("r-num").textContent = $("v-num").textContent = round;
+  $("guess").value = ""; note("");
+  paintLadder(); show("round"); clock.start(R.round_seconds);
+  setTimeout(() => $("guess").focus(), 50);
+}
+function paintLadder() {
+  const cs = clues(cur);
+  $("ladder").innerHTML = cs.map((c, i) => `<div class="rung${i < open ? " open" : " locked"}${c.story ? " story" : ""}">
+    <span class="pts">${R.points[i]}</span><div><div class="k">${esc(c.k)}</div><div class="v">${i < open ? esc(c.v) : "Hidden clue"}</div></div></div>`).join("");
+  $("btn-clue").disabled = open >= cs.length;
+  $("btn-clue").style.opacity = open >= cs.length ? .45 : 1;
+}
+function note(t, cls = "") { $("note").textContent = t; $("note").className = "note-line " + cls; }
+$("btn-clue").addEventListener("click", () => { if (open < 4) { open++; paintLadder(); note(""); } });
+$("btn-give-up").addEventListener("click", () => finish("gave-up"));
+
+let wrong = [];
+$("answer-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const g = $("guess").value.trim(); if (!g) return;
+  const sc = score(g, cur);
+  if (sc >= R.match_threshold) return finish("solved", g);
+  wrong.push(g);
+  // Another real song? Say so, so a right-song-wrong-film guess isn't mistaken for a typo.
+  const other = SONGS.find((s) => s !== cur && score(g, s) >= R.match_threshold);
+  if (sc >= R.close_threshold) note("So close. Check the spelling.", "close");
+  else if (other) note(`${other.title} is from ${other.film}. Not this one.`, "bad");
+  else note("Not this one.", "bad");
+  Kit.shake($("field"));
+});
+
+const rate = Kit.rating({ container: $("rate"), storeKey: "sr-ratings" });
+function finish(how, guess = "") {
+  clock.stop();
+  const solved = how === "solved";
+  const pts = solved ? R.points[open - 1] + Math.round(R.speed_bonus * clock.left / R.round_seconds) : 0;
+  total += pts;
+  history.push({ s: cur, solved, open, pts });
+  Kit.save(`plays/${cur.id.replace(/[^A-Za-z0-9_\-.~:@+]/g, "_")}-${Kit.tag()}-${Date.now()}`, {
+    song: cur.id, title: cur.title, film: cur.film, mode, solved, how, clues_used: open, guess, wrong_guesses: wrong, seconds_left: clock.left });
+  wrong = [];
+  $("v-score").textContent = total.toLocaleString();
+  $("v-verdict").className = "verdict " + (solved ? (open === 1 ? "win" : "near") : "lose");
+  $("v-verdict").textContent = solved ? (open === 1 ? "First clue!" : `Got it on clue ${open}`) : how === "time" ? "Time's up" : "Gave up";
+  $("v-title").textContent = cur.title;
+  $("v-meta").textContent = `${cur.film}${cur.year ? ` · ${cur.year}` : ""}`;
+  $("v-points").textContent = solved ? "+" + pts : "0";
+  $("v-points").className = "points" + (solved ? "" : " zero");
+  $("v-why").innerHTML = (cur.gist && mode === "story" ? `<b>${esc(cur.gist)}</b><br>` : "") +
+    `Music by <b>${esc(join(cur.music))}</b> · lyrics by <b>${esc(join(cur.lyricists))}</b> · sung by <b>${esc(join(cur.singers))}</b>`;
+  rate.show(cur.id.replace(/[^A-Za-z0-9_\-.~:@+]/g, "_"), { song: cur.id, title: cur.title, mode, solved, clues_used: open });
+  $("btn-next").textContent = round >= queue.length ? "See final score" : "Next song";
+  show("reveal");
+}
+$("btn-next").addEventListener("click", next);
+
+function end() {
+  const got = history.filter((h) => h.solved).length, firsts = history.filter((h) => h.solved && h.open === 1).length;
+  $("e-sub").textContent = `${got} of ${history.length} named · ${firsts} on the first clue`;
+  $("e-title").textContent = total.toLocaleString() + " pts";
+  $("e-line").textContent = firsts >= history.length / 2 ? "You hear the first beat and you know. Respect." : got >= history.length / 2 ? "Solid playlist memory." : "Time to put the old albums back on.";
+  $("e-list").innerHTML = history.map((h) => `<span class="mark ${!h.solved ? "miss" : h.open === 1 ? "hit" : "near"}"></span><b>${esc(h.s.title)}</b> · ${esc(h.s.film)}${h.solved ? ` · clue ${h.open} · +${h.pts}` : ""}`).join("<br>");
+  Kit.renderSync($("sync-note"), "the clue writers");
+  show("end");
+}
+$("btn-again").addEventListener("click", () => { paintStart(); show("start"); });
+$("btn-start").addEventListener("click", startGame);
+paintStart();
+</script>
+</body>
+</html>

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kollywood Game Night</title>
+<meta name="description" content="Party games for Tamil cinema fans. Pick a game and play on your phone.">
+<meta property="og:title" content="Kollywood Game Night">
+<meta property="og:description" content="Four quick games for Tamil cinema fans: Three Clues, Co-Star, Daily Crossword and Song Riddle.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#17123B">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2317123B'/%3E%3Crect x='6' y='9' width='20' height='14' rx='3' fill='%23FFC627'/%3E%3Ccircle cx='6' cy='16' r='3' fill='%2317123B'/%3E%3Ccircle cx='26' cy='16' r='3' fill='%2317123B'/%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=Anek+Tamil:wdth,wght@75..125,400..800&family=Catamaran:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Brand tokens shared by every game. Games use these variables and never hard-code brand colours or fonts.
+   Fonts load from design/fonts.html. Build inlines both into each game's client at <!--BRAND-->. */
+:root {
+  --night: #17123B; --night-2: #221B4F; --night-3: #2E2662; --line: rgba(255,244,226,.10);
+  --stage: #0D0A24; --paper: #FFF4E2; --muted: #B9B0D9;
+  --gold: #FFC627; --coral: #FF5A5F; --mint: #3DDC97;
+  --t-pink: #FF8FB1; --t-yellow: #FFD45C; --t-mint: #8FE3C6; --ink: #17123B;
+  color-scheme: dark;
+  --display: "Anek Tamil", system-ui, sans-serif; --body: "Catamaran", system-ui, sans-serif;
+}
+/* House UI shared by every game: phone frame, header, timer ring, buttons, autocomplete answer field, reveal,
+   ratings, end screen. Uses only design/tokens.css variables. Inlined by tools/build.py at <!--BRAND-->.
+   A game's own stylesheet holds only what is unique to it (Three Clues' tickets, Co-Star's route rail). */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { background: var(--stage); color: var(--paper); font-family: var(--body); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+
+.app { max-width: 430px; min-height: 100%; margin: 0 auto; background: var(--night); display: flex; flex-direction: column; padding: max(16px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom)); }
+@media (min-width: 600px) { body { padding: 32px 0; } .app { min-height: 820px; border-radius: 36px; box-shadow: 0 0 0 10px #050414, 0 0 0 11px #2a2450, 0 30px 60px rgba(0,0,0,.5); } }
+.screen { flex: 1; display: flex; flex-direction: column; }
+
+.head { display: flex; align-items: center; justify-content: space-between; min-height: 44px; margin-bottom: 14px; }
+.head .r { font-size: 15px; font-weight: 600; color: var(--muted); }
+.head .r b { color: var(--paper); }
+.score { font-family: var(--display); font-weight: 800; font-size: 20px; font-variant-numeric: tabular-nums; }
+.score small { font-family: var(--body); font-weight: 600; font-size: 13px; color: var(--muted); margin-right: 4px; }
+.timer { display: flex; align-items: center; gap: 8px; font-family: var(--display); font-weight: 700; font-size: 20px; font-variant-numeric: tabular-nums; color: var(--coral); }
+.timer svg { width: 26px; height: 26px; }
+.timer .bg { stroke: var(--coral); opacity: .22; }
+.timer .fg { stroke: var(--coral); transition: stroke-dashoffset 1s linear; }
+
+.btn { min-height: 54px; border-radius: 16px; border: 0; font-size: 17px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
+.btn-primary { background: var(--gold); color: var(--ink); }
+.btn-quiet { background: var(--night-2); color: var(--paper); }
+.eyebrow { font-size: 13px; font-weight: 600; color: var(--muted); }
+
+/* start */
+.hero { padding: 48px 0 28px; }
+.hero h1 { font-family: var(--display); font-weight: 800; font-stretch: 85%; font-size: 56px; line-height: .92; letter-spacing: -.01em; margin-top: 10px; }
+.hero p { color: var(--muted); font-size: 17px; line-height: 1.45; margin-top: 14px; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--night-2); border-radius: 14px; padding: 4px; margin: 8px 0 22px; }
+.seg button { min-height: 44px; border: 0; background: none; font-size: 15px; font-weight: 600; color: var(--muted); border-radius: 10px; }
+.seg button[aria-pressed="true"] { background: var(--night-3); color: var(--paper); box-shadow: inset 0 0 0 1px rgba(255,244,226,.12); }
+.meta-line { font-size: 13px; color: var(--muted); text-align: center; margin-top: 12px; }
+
+.row { display: flex; gap: 10px; margin-top: 14px; }
+.row .btn { min-height: 46px; font-size: 15px; white-space: nowrap; }
+.row .btn.fit { flex: 0 0 auto; width: auto; padding-inline: 22px; }
+.misses { min-height: 22px; margin: 14px 4px 0; font-size: 15px; color: var(--muted); }
+.misses s { color: var(--coral); text-decoration-thickness: 1.5px; margin-right: 8px; }
+
+/* answer field with autocomplete */
+.answer { margin-top: auto; padding-top: 16px; position: relative; }
+.suggest { background: var(--night-2); border-radius: 16px; padding: 6px; margin-bottom: 8px; }
+.suggest:empty { display: none; }
+.sug { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 50px; padding: 0 12px; border-radius: 12px; width: 100%; border: 0; background: none; text-align: left; }
+.sug[aria-selected="true"], .sug:hover { background: var(--night-3); }
+.sug .t { font-size: 17px; font-weight: 700; }
+.sug .t mark { background: none; color: var(--gold); }
+.sug .m { font-size: 13px; color: var(--muted); flex: none; }
+.field { display: flex; align-items: center; gap: 10px; height: 54px; background: var(--paper); color: var(--ink); border-radius: 16px; padding: 0 7px 0 16px; }
+.field.shake { animation: shake .35s; }
+@keyframes shake { 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
+.field input { flex: 1; border: 0; background: none; font: inherit; font-size: 17px; font-weight: 600; color: var(--ink); min-width: 0; }
+.field input:focus-visible { outline: none; }
+.field input::placeholder { color: #6E6890; font-weight: 500; }
+.field .go { width: 42px; height: 42px; border-radius: 12px; background: var(--ink); color: var(--gold); display: grid; place-items: center; border: 0; flex: none; }
+.field .go svg { width: 20px; height: 20px; }
+
+/* reveal */
+.reveal-top { text-align: center; padding: 22px 0 18px; }
+.verdict { display: inline-block; font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 8px; margin-bottom: 12px; color: var(--ink); }
+.verdict.win { background: var(--mint); } .verdict.lose { background: var(--coral); } .verdict.near { background: var(--gold); }
+.film { font-family: var(--display); font-weight: 800; font-stretch: 88%; font-size: 48px; line-height: .95; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.film-ta { font-family: var(--display); font-weight: 600; font-size: 22px; color: var(--muted); margin-top: 6px; }
+.film-meta { font-size: 14px; color: var(--muted); margin-top: 8px; }
+.points { font-family: var(--display); font-weight: 800; font-size: 40px; color: var(--mint); text-align: center; font-variant-numeric: tabular-nums; }
+.points.zero { color: var(--muted); }
+.why { background: var(--night-2); border-radius: 16px; padding: 14px 16px; margin-top: 14px; font-size: 15px; line-height: 1.45; color: var(--muted); }
+.why b { color: var(--paper); font-weight: 600; }
+.rate { margin-top: 14px; }
+.rate .opts { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; margin-top: 8px; }
+.rate button { min-height: 52px; border: 0; border-radius: 12px; background: var(--night-2); font-size: 13px; font-weight: 600; color: var(--muted); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.rate button span { font-size: 18px; }
+.rate button[aria-pressed="true"] { background: var(--night-3); color: var(--paper); box-shadow: inset 0 0 0 1.5px var(--gold); }
+.next-wrap { margin-top: auto; padding-top: 16px; display: grid; gap: 8px; }
+
+/* end */
+.mark { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 10px; vertical-align: 1px; }
+.mark.hit { background: var(--mint); } .mark.near { background: var(--gold); } .mark.miss { background: transparent; box-shadow: inset 0 0 0 2px var(--coral); }
+.sync-note { text-align: center; }
+.sync-note.bad { color: var(--coral); }
+.export { background: none; border: 0; color: var(--muted); font-size: 13px; text-decoration: underline; min-height: 32px; }
+
+.hidden { display: none !important; }
+@media (prefers-reduced-motion: reduce) { .field.shake { animation: none; } .timer .fg { transition: none; } }
+</style>
+<style>
+  /* Home page only: the game cards. Everything else comes from design/kit.css. */
+  .games { display: grid; gap: 14px; }
+  .card { position: relative; display: flex; align-items: stretch; border-radius: 18px; color: var(--ink); text-decoration: none; overflow: hidden; min-height: 112px;
+          transition: transform .15s ease; }
+  .card:active { transform: scale(.98); }
+  .card:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+  .card .main { flex: 1; padding: 16px 18px; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+  .card .n { font-family: var(--display); font-weight: 800; font-stretch: 85%; font-size: 30px; line-height: 1; text-transform: uppercase; }
+  .card .b { font-size: 15px; font-weight: 600; line-height: 1.35; opacity: .8; }
+  .card .stub { flex: none; width: 74px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-left: 2px dashed rgba(23,18,59,.28); }
+  .card .stub b { font-family: var(--display); font-weight: 800; font-size: 26px; line-height: 1; }
+  .card .stub small { font-size: 11px; font-weight: 700; letter-spacing: .05em; opacity: .7; text-transform: uppercase; }
+  .card::before, .card::after { content: ""; position: absolute; right: 64px; width: 20px; height: 20px; border-radius: 50%; background: var(--night); }
+  .card::before { top: -10px; } .card::after { bottom: -10px; }
+  .tag { display: inline-block; align-self: flex-start; font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; background: var(--ink); color: var(--gold); padding: 2px 7px; border-radius: 5px; }
+  .foot { font-size: 13px; color: var(--muted); text-align: center; line-height: 1.5; margin-top: 22px; }
+  @media (prefers-reduced-motion: reduce) { .card { transition: none; } }
+</style>
+</head>
+<body>
+<main class="app">
+  <section class="screen">
+    <div class="hero" style="padding-bottom:22px">
+      <div class="eyebrow">Tamil cinema · party games</div>
+      <h1>Kollywood Game Night</h1>
+      <p>Pick a game. Play on your phone, then send your score to the group.</p>
+    </div>
+    <nav class="games" id="games" aria-label="Games"></nav>
+    <p class="foot">Early prototype. Scores stay on your phone.<br>Film facts from Wikidata, IMDb and the Tamil movie knowledge graph.</p>
+  </section>
+</main>
+<script>
+const SITE = {"games": [{"id": "three-clues", "name": "Three Clues", "daily": false, "order": 1, "accent": "t-pink", "blurb": "Three tickets, three words, one film."}, {"id": "co-star", "name": "Co-Star", "daily": false, "order": 2, "accent": "t-mint", "blurb": "Link two stars through the films they shared."}, {"id": "crossword", "name": "Daily Crossword", "daily": true, "order": 3, "accent": "t-yellow", "blurb": "A new grid every day. Same one for everyone."}, {"id": "song-riddle", "name": "Song Riddle", "daily": false, "order": 4, "accent": "muted", "blurb": "Name the song from its story, its music, its voices."}]};
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+document.getElementById("games").innerHTML = SITE.games.map((g, i) => `
+  <a class="card" href="${esc(g.id)}/" style="background:var(--${esc(g.accent)})">
+    <span class="main">${g.daily ? '<span class="tag">New every day</span>' : ""}<span class="n">${esc(g.name)}</span><span class="b">${esc(g.blurb)}</span></span>
+    <span class="stub"><b>${String(i + 1).padStart(2, "0")}</b><small>Play</small></span>
+  </a>`).join("");
+</script>
+</body>
+</html>

@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Daily Crossword</title>
+<link href="https://fonts.googleapis.com/css2?family=Anek+Tamil:wdth,wght@75..125,400..800&family=Catamaran:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Brand tokens shared by every game. Games use these variables and never hard-code brand colours or fonts.
+   Fonts load from design/fonts.html. Build inlines both into each game's client at <!--BRAND-->. */
+:root {
+  --night: #17123B; --night-2: #221B4F; --night-3: #2E2662; --line: rgba(255,244,226,.10);
+  --stage: #0D0A24; --paper: #FFF4E2; --muted: #B9B0D9;
+  --gold: #FFC627; --coral: #FF5A5F; --mint: #3DDC97;
+  --t-pink: #FF8FB1; --t-yellow: #FFD45C; --t-mint: #8FE3C6; --ink: #17123B;
+  color-scheme: dark;
+  --display: "Anek Tamil", system-ui, sans-serif; --body: "Catamaran", system-ui, sans-serif;
+}
+/* House UI shared by every game: phone frame, header, timer ring, buttons, autocomplete answer field, reveal,
+   ratings, end screen. Uses only design/tokens.css variables. Inlined by tools/build.py at <!--BRAND-->.
+   A game's own stylesheet holds only what is unique to it (Three Clues' tickets, Co-Star's route rail). */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { background: var(--stage); color: var(--paper); font-family: var(--body); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+
+.app { max-width: 430px; min-height: 100%; margin: 0 auto; background: var(--night); display: flex; flex-direction: column; padding: max(16px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom)); }
+@media (min-width: 600px) { body { padding: 32px 0; } .app { min-height: 820px; border-radius: 36px; box-shadow: 0 0 0 10px #050414, 0 0 0 11px #2a2450, 0 30px 60px rgba(0,0,0,.5); } }
+.screen { flex: 1; display: flex; flex-direction: column; }
+
+.head { display: flex; align-items: center; justify-content: space-between; min-height: 44px; margin-bottom: 14px; }
+.head .r { font-size: 15px; font-weight: 600; color: var(--muted); }
+.head .r b { color: var(--paper); }
+.score { font-family: var(--display); font-weight: 800; font-size: 20px; font-variant-numeric: tabular-nums; }
+.score small { font-family: var(--body); font-weight: 600; font-size: 13px; color: var(--muted); margin-right: 4px; }
+.timer { display: flex; align-items: center; gap: 8px; font-family: var(--display); font-weight: 700; font-size: 20px; font-variant-numeric: tabular-nums; color: var(--coral); }
+.timer svg { width: 26px; height: 26px; }
+.timer .bg { stroke: var(--coral); opacity: .22; }
+.timer .fg { stroke: var(--coral); transition: stroke-dashoffset 1s linear; }
+
+.btn { min-height: 54px; border-radius: 16px; border: 0; font-size: 17px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
+.btn-primary { background: var(--gold); color: var(--ink); }
+.btn-quiet { background: var(--night-2); color: var(--paper); }
+.eyebrow { font-size: 13px; font-weight: 600; color: var(--muted); }
+
+/* start */
+.hero { padding: 48px 0 28px; }
+.hero h1 { font-family: var(--display); font-weight: 800; font-stretch: 85%; font-size: 56px; line-height: .92; letter-spacing: -.01em; margin-top: 10px; }
+.hero p { color: var(--muted); font-size: 17px; line-height: 1.45; margin-top: 14px; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--night-2); border-radius: 14px; padding: 4px; margin: 8px 0 22px; }
+.seg button { min-height: 44px; border: 0; background: none; font-size: 15px; font-weight: 600; color: var(--muted); border-radius: 10px; }
+.seg button[aria-pressed="true"] { background: var(--night-3); color: var(--paper); box-shadow: inset 0 0 0 1px rgba(255,244,226,.12); }
+.meta-line { font-size: 13px; color: var(--muted); text-align: center; margin-top: 12px; }
+
+.row { display: flex; gap: 10px; margin-top: 14px; }
+.row .btn { min-height: 46px; font-size: 15px; white-space: nowrap; }
+.row .btn.fit { flex: 0 0 auto; width: auto; padding-inline: 22px; }
+.misses { min-height: 22px; margin: 14px 4px 0; font-size: 15px; color: var(--muted); }
+.misses s { color: var(--coral); text-decoration-thickness: 1.5px; margin-right: 8px; }
+
+/* answer field with autocomplete */
+.answer { margin-top: auto; padding-top: 16px; position: relative; }
+.suggest { background: var(--night-2); border-radius: 16px; padding: 6px; margin-bottom: 8px; }
+.suggest:empty { display: none; }
+.sug { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 50px; padding: 0 12px; border-radius: 12px; width: 100%; border: 0; background: none; text-align: left; }
+.sug[aria-selected="true"], .sug:hover { background: var(--night-3); }
+.sug .t { font-size: 17px; font-weight: 700; }
+.sug .t mark { background: none; color: var(--gold); }
+.sug .m { font-size: 13px; color: var(--muted); flex: none; }
+.field { display: flex; align-items: center; gap: 10px; height: 54px; background: var(--paper); color: var(--ink); border-radius: 16px; padding: 0 7px 0 16px; }
+.field.shake { animation: shake .35s; }
+@keyframes shake { 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
+.field input { flex: 1; border: 0; background: none; font: inherit; font-size: 17px; font-weight: 600; color: var(--ink); min-width: 0; }
+.field input:focus-visible { outline: none; }
+.field input::placeholder { color: #6E6890; font-weight: 500; }
+.field .go { width: 42px; height: 42px; border-radius: 12px; background: var(--ink); color: var(--gold); display: grid; place-items: center; border: 0; flex: none; }
+.field .go svg { width: 20px; height: 20px; }
+
+/* reveal */
+.reveal-top { text-align: center; padding: 22px 0 18px; }
+.verdict { display: inline-block; font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 8px; margin-bottom: 12px; color: var(--ink); }
+.verdict.win { background: var(--mint); } .verdict.lose { background: var(--coral); } .verdict.near { background: var(--gold); }
+.film { font-family: var(--display); font-weight: 800; font-stretch: 88%; font-size: 48px; line-height: .95; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.film-ta { font-family: var(--display); font-weight: 600; font-size: 22px; color: var(--muted); margin-top: 6px; }
+.film-meta { font-size: 14px; color: var(--muted); margin-top: 8px; }
+.points { font-family: var(--display); font-weight: 800; font-size: 40px; color: var(--mint); text-align: center; font-variant-numeric: tabular-nums; }
+.points.zero { color: var(--muted); }
+.why { background: var(--night-2); border-radius: 16px; padding: 14px 16px; margin-top: 14px; font-size: 15px; line-height: 1.45; color: var(--muted); }
+.why b { color: var(--paper); font-weight: 600; }
+.rate { margin-top: 14px; }
+.rate .opts { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; margin-top: 8px; }
+.rate button { min-height: 52px; border: 0; border-radius: 12px; background: var(--night-2); font-size: 13px; font-weight: 600; color: var(--muted); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.rate button span { font-size: 18px; }
+.rate button[aria-pressed="true"] { background: var(--night-3); color: var(--paper); box-shadow: inset 0 0 0 1.5px var(--gold); }
+.next-wrap { margin-top: auto; padding-top: 16px; display: grid; gap: 8px; }
+
+/* end */
+.mark { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 10px; vertical-align: 1px; }
+.mark.hit { background: var(--mint); } .mark.near { background: var(--gold); } .mark.miss { background: transparent; box-shadow: inset 0 0 0 2px var(--coral); }
+.sync-note { text-align: center; }
+.sync-note.bad { color: var(--coral); }
+.export { background: none; border: 0; color: var(--muted); font-size: 13px; text-decoration: underline; min-height: 32px; }
+
+.hidden { display: none !important; }
+@media (prefers-reduced-motion: reduce) { .field.shake { animation: none; } .timer .fg { transition: none; } }
+</style>
+<style>
+  /* Crossword only: the grid, the clue bar, the letter keyboard. Everything else comes from design/kit.css. */
+  .clock { font-family: var(--display); font-weight: 700; font-size: 20px; font-variant-numeric: tabular-nums; color: var(--gold); }
+  .board { display: grid; gap: 3px; margin: 0 auto; width: 100%; touch-action: manipulation; }
+  .cell { position: relative; aspect-ratio: 1; border-radius: 5px; border: 0; padding: 0; background: var(--paper); color: var(--ink);
+          font-family: var(--display); font-weight: 800; font-size: clamp(15px, 5vw, 21px); line-height: 1; display: grid; place-items: center; text-transform: uppercase; }
+  .cell.void { background: transparent; pointer-events: none; }
+  .cell .no { position: absolute; top: 2px; left: 3px; font-family: var(--body); font-size: 9px; font-weight: 700; opacity: .65; }
+  .cell.word { background: var(--t-yellow); }
+  .cell.cur { background: var(--gold); box-shadow: inset 0 0 0 2.5px var(--ink); }
+  .cell.bad { color: var(--coral); }
+  .cell.shown::after { content: ""; position: absolute; right: 3px; bottom: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--coral); }
+  .board.solved .cell:not(.void) { background: var(--t-mint); animation: pop .5s cubic-bezier(.2,.9,.3,1.3) both; }
+  @keyframes pop { from { transform: scale(.85); } to { transform: none; } }
+
+  .cluebar { display: flex; align-items: stretch; gap: 6px; background: var(--night-2); border-radius: 14px; margin-top: 14px; min-height: 76px; }
+  .cluebar .nav { flex: none; width: 40px; border: 0; background: none; color: var(--muted); font-size: 22px; border-radius: 14px; }
+  .cluebar .nav:hover { background: var(--night-3); color: var(--paper); }
+  .cluebar .txt { flex: 1; padding: 10px 2px; border: 0; background: none; text-align: left; }
+  .cluebar .top { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: var(--muted); }
+  .cluebar .q { font-size: 16px; font-weight: 600; line-height: 1.35; margin-top: 4px; color: var(--paper); }
+  .cluebar .q small { color: var(--muted); font-weight: 600; }
+  .kind { display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--ink); padding: 2px 7px; border-radius: 5px; }
+  .kind.film { background: var(--t-yellow); } .kind.star { background: var(--t-pink); } .kind.director { background: var(--t-mint); } .kind.music { background: var(--muted); }
+
+  .keys { display: grid; gap: 6px; margin-top: 12px; }
+  .keys .kr { display: flex; gap: 5px; justify-content: center; }
+  .keys button { flex: 1; max-width: 36px; height: 48px; border: 0; border-radius: 8px; background: var(--night-3); font-weight: 700; font-size: 17px; }
+  .keys button:active { background: var(--gold); color: var(--ink); }
+  .keys button.wide { max-width: 58px; flex: 1.5; font-size: 15px; }
+  .tools { display: flex; gap: 8px; margin-top: 10px; }
+  .tools .btn { min-height: 40px; font-size: 14px; border-radius: 12px; }
+  .note { min-height: 20px; margin-top: 8px; font-size: 14px; color: var(--muted); text-align: center; }
+
+  .sheet { position: fixed; inset: 0; background: rgba(13,10,36,.7); display: flex; align-items: flex-end; justify-content: center; z-index: 5; }
+  .sheet .in { background: var(--night); width: 100%; max-width: 430px; max-height: 80vh; overflow: auto; border-radius: 22px 22px 0 0; padding: 18px 20px 28px; }
+  .sheet h3 { font-family: var(--display); font-size: 20px; margin: 14px 0 6px; }
+  .sheet button.cl { display: flex; gap: 10px; width: 100%; text-align: left; border: 0; background: none; padding: 8px 6px; border-radius: 10px; font-size: 15px; line-height: 1.35; }
+  .sheet button.cl:hover, .sheet button.cl.on { background: var(--night-2); }
+  .sheet button.cl b { flex: none; width: 22px; color: var(--gold); }
+  .sheet button.cl.done { color: var(--muted); text-decoration: line-through; }
+
+  .big-time { font-family: var(--display); font-weight: 800; font-size: 64px; line-height: 1; text-align: center; font-variant-numeric: tabular-nums; color: var(--mint); }
+  .answers { margin-top: 14px; }
+  .answers div { padding: 4px 0; }
+  .answers b { color: var(--paper); font-family: var(--display); letter-spacing: .03em; }
+  .past { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .past button { min-height: 40px; padding: 0 12px; border: 0; border-radius: 10px; background: var(--night-2); font-size: 14px; font-weight: 600; }
+  .past button .mark { margin-right: 6px; }
+  @media (prefers-reduced-motion: reduce) { .board.solved .cell { animation: none; } }
+</style>
+</head>
+<body>
+<main class="app" id="app">
+<style>.home-link{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;min-height:32px;margin:-6px 0 6px;
+font-size:14px;font-weight:600;color:var(--muted);text-decoration:none}.home-link:hover{color:var(--paper)}</style>
+<a class="home-link" href="../">‹ All games</a>
+
+  <!-- START -->
+  <section class="screen" id="screen-start">
+    <div class="hero">
+      <div class="eyebrow" id="s-date"></div>
+      <h1>Daily Crossword</h1>
+      <p>Ten Kollywood answers: films, stars, directors and music. One small grid a day, the same for everyone.</p>
+    </div>
+    <div class="why" id="s-legend">
+      <span class="kind film">Film</span> <span class="kind star">Star</span> <span class="kind director">Director</span> <span class="kind music">Music</span>
+      <div style="margin-top:10px">Spaces and dots are dropped: <b>Kamal Haasan</b> fills as <b>KAMALHAASAN (5,6)</b>. Initials stay in the clue: <b>A.R. ___</b> is RAHMAN.</div>
+    </div>
+    <div id="s-past-wrap" class="hidden">
+      <div class="eyebrow" style="margin:18px 4px 0">Earlier puzzles</div>
+      <div class="past" id="s-past"></div>
+    </div>
+    <div style="margin-top:auto"></div>
+    <button class="btn btn-primary" id="btn-play"></button>
+    <p class="meta-line" id="s-meta"></p>
+  </section>
+
+  <!-- PLAY -->
+  <section class="screen hidden" id="screen-play">
+    <div class="head">
+      <span class="r"><b id="p-no"></b> · <span id="p-left"></span></span>
+      <span class="clock" id="p-clock" aria-live="off">0:00</span>
+    </div>
+    <div class="board" id="board" role="grid" aria-label="Crossword grid"></div>
+    <div class="cluebar">
+      <button class="nav" id="prev" aria-label="Previous clue">‹</button>
+      <button class="txt" id="clue-txt" aria-label="All clues"><div class="top" id="clue-top"></div><div class="q" id="clue-q"></div></button>
+      <button class="nav" id="next" aria-label="Next clue">›</button>
+    </div>
+    <div class="tools">
+      <button class="btn btn-quiet" id="btn-check">Check word</button>
+      <button class="btn btn-quiet" id="btn-reveal">Reveal letter</button>
+      <button class="btn btn-quiet" id="btn-list">All clues</button>
+    </div>
+    <div class="note" id="note" aria-live="polite"></div>
+    <div class="keys" id="keys" aria-label="Keyboard"></div>
+  </section>
+
+  <!-- DONE -->
+  <section class="screen hidden" id="screen-done">
+    <div class="reveal-top">
+      <span class="verdict win" id="d-verdict">Solved</span>
+      <div class="big-time" id="d-time"></div>
+      <div class="film-meta" id="d-meta"></div>
+    </div>
+    <button class="btn btn-primary" id="btn-share">Copy result to share</button>
+    <div class="why answers" id="d-answers"></div>
+    <div class="rate">
+      <div class="eyebrow" style="margin-left:4px">How was today's grid?</div>
+      <div class="opts" id="rate" role="group" aria-label="Rate this puzzle">
+        <button data-rate="loved" aria-pressed="false"><span>🔥</span>Loved</button>
+        <button data-rate="easy" aria-pressed="false"><span>🥱</span>Too easy</button>
+        <button data-rate="hard" aria-pressed="false"><span>🤯</span>Too hard</button>
+        <button data-rate="wrong" aria-pressed="false"><span>🚩</span>Wrong clue</button>
+      </div>
+    </div>
+    <div class="next-wrap">
+      <button class="btn btn-quiet" id="btn-home">Back</button>
+      <p class="eyebrow sync-note" id="sync-note" hidden aria-live="polite"></p>
+    </div>
+  </section>
+
+</main>
+<div class="sheet hidden" id="sheet"><div class="in" id="sheet-in"></div></div>
+
+<script>
+/* Shared client kit for every game. Inlined by tools/build.py at the KIT marker, before the game's own script.
+   Kit.$ / esc / norm / store / shake       small helpers
+   Kit.screens(names)                       returns show(name): one <section id="screen-<name>"> visible at a time
+   Kit.save(path, data) / Kit.remove(path)  write to the artifact's shared db when published (no-op from a file)
+   Kit.renderSync(el, reader)               end-screen line saying whether results were saved, never silent
+   Kit.autocomplete({...})                  answer field with suggestions, arrow keys and Enter
+   Kit.countdown({...})                     timer ring + m:ss text
+   Kit.rating({...})                        Loved / Too easy / Too hard / Wrong buttons, saved locally and to the db */
+const Kit = (() => {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  // Same rule as tools/common.answer_key: lowercase, accents and punctuation dropped, Tamil script kept.
+  const norm = (s) => (s || "").normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9஀-௿]/g, "");
+  const store = {
+    get(k, d) { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+  const shake = (el) => { el.classList.remove("shake"); void el.offsetWidth; el.classList.add("shake"); };
+  const screens = (names) => (id) => { for (const s of names) $("screen-" + s).classList.toggle("hidden", s !== id); };
+  const mmss = (s) => `${Math.floor(Math.max(s, 0) / 60)}:${String(Math.max(s, 0) % 60).padStart(2, "0")}`;
+
+  // ---- results to the artifact db. state: local (plain file) | checking | on | off ----
+  let db = null, me = "local";
+  const sync = { state: window.claude?.use ? "checking" : "local", saved: 0, failed: 0, error: "" };
+  const ready = (async () => {
+    if (sync.state === "local") return false;
+    try {
+      db = await window.claude.use("db");
+      const user = await window.claude.use("user");
+      if (user) me = (await user.id()) || "anon";
+    } catch (e) { sync.error = e?.code || e?.message || String(e); }
+    sync.state = db ? "on" : "off";
+    return !!db;
+  })();
+  let syncEl = null, syncReader = "";
+  const write = (fn) => {
+    if (!db) return;
+    fn(db).then(() => { sync.saved++; paint(); })
+      .catch((e) => { sync.failed++; sync.error = e?.code || e?.message || String(e); console.warn("db write failed", e); paint(); });
+  };
+  const tag = () => me.slice(0, 8);
+  const save = (path, data) => write((d) => d.doc(path).set({ ...data, player: me, at: new Date().toISOString() }));
+  const remove = (path) => write((d) => d.doc(path).delete());
+  function paint() {
+    if (!syncEl) return;
+    const t = {
+      local: "",
+      checking: "Still connecting, so results may not be saved.",
+      off: "Not saved: this view can't reach the shared store. Open the artifact while signed in with edit access.",
+      on: sync.failed ? `Not saved: ${sync.failed} of ${sync.saved + sync.failed} saves failed (${sync.error}).` : `Saved ${sync.saved} results for ${syncReader}.`,
+    }[sync.state];
+    syncEl.textContent = t; syncEl.hidden = !t; syncEl.classList.toggle("bad", sync.state !== "on" || sync.failed > 0);
+  }
+  const renderSync = (el, reader) => { syncEl = el; syncReader = reader; paint(); };
+
+  // ---- autocomplete answer field ----
+  // search(q) -> [{label, meta, value}]; onPick(item) when a suggestion is chosen; onText(text) on Enter with none.
+  function autocomplete({ form, input, list, search, onPick, onText = () => {}, max = 4 }) {
+    let items = [], sel = 0;
+    const render = () => {
+      const q = input.value.trim();
+      items = q.length >= 2 ? search(q).slice(0, max) : [];
+      sel = 0; list.innerHTML = "";
+      items.forEach((it, i) => {
+        const b = document.createElement("button");
+        b.type = "button"; b.className = "sug"; b.setAttribute("role", "option"); b.setAttribute("aria-selected", i === sel);
+        const k = it.label.toLowerCase().indexOf(q.toLowerCase());
+        const label = k >= 0 ? esc(it.label.slice(0, k)) + "<mark>" + esc(it.label.slice(k, k + q.length)) + "</mark>" + esc(it.label.slice(k + q.length)) : esc(it.label);
+        b.innerHTML = `<span class="t">${label}</span><span class="m">${esc(it.meta ?? "")}</span>`;
+        b.addEventListener("click", () => pick(it));
+        list.appendChild(b);
+      });
+    };
+    const pick = (it) => { input.value = ""; render(); onPick(it); };
+    input.addEventListener("input", render);
+    input.addEventListener("keydown", (e) => {
+      if (!items.length || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
+      e.preventDefault(); sel = (sel + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length;
+      [...list.children].forEach((o, i) => o.setAttribute("aria-selected", i === sel));
+    });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (items.length) return pick(items[sel]);
+      const t = input.value.trim(); if (t) onText(t);
+    });
+    return { clear() { input.value = ""; render(); }, focus() { setTimeout(() => input.focus(), 50); } };
+  }
+
+  // ---- countdown with ring (circle.fg with r=10.5 -> circumference 66) ----
+  function countdown({ ring, text, onEnd, onTick = () => {} }) {
+    let timer = null, total = 1, left = 0;
+    const paintT = () => { text.textContent = mmss(left); ring.style.strokeDashoffset = 66 * (1 - Math.max(left, 0) / total); onTick(left); };
+    return {
+      start(seconds) { clearInterval(timer); total = left = seconds; paintT(); timer = setInterval(() => { left--; paintT(); if (left <= 0) { clearInterval(timer); onEnd(); } }, 1000); },
+      stop() { clearInterval(timer); },
+      get left() { return left; }, get total() { return total; }, mmss,
+    };
+  }
+
+  // ---- ratings: buttons with data-rate inside container ----
+  function rating({ container, storeKey }) {
+    // In memory first: browser storage can be missing (private windows, previews), and the buttons must still work.
+    let id = null, meta = {};
+    const all = store.get(storeKey, {});
+    const btns = [...container.querySelectorAll("button[data-rate]")];
+    const paintR = () => { const r = all[id]?.rate; btns.forEach((b) => b.setAttribute("aria-pressed", r === b.dataset.rate)); };
+    btns.forEach((b) => b.addEventListener("click", () => {
+      const on = all[id]?.rate !== b.dataset.rate;
+      if (on) all[id] = { rate: b.dataset.rate, ...meta, at: new Date().toISOString() }; else delete all[id];
+      store.set(storeKey, all); paintR();
+      if (on) save(`ratings/${id}-${tag()}`, { ...all[id], item: id }); else remove(`ratings/${id}-${tag()}`);
+    }));
+    return { show(itemId, itemMeta) { id = itemId; meta = itemMeta; paintR(); }, all: () => all };
+  }
+
+  return { $, esc, norm, store, shake, screens, ready, save, remove, renderSync, tag, autocomplete, countdown, rating, mmss };
+})();
+
+</script>
+<script>
+const DATA = {"game":{"id":"crossword","name":"Daily Crossword","tagline":"One small Kollywood crossword a day. Same grid for everyone.","status":"prototype","uses_catalogue":["films","people","credits"],"levels":["daily"],"rules":{"check_penalty_seconds":10,"reveal_penalty_seconds":30},"home":{"order":3,"accent":"t-yellow","blurb":"A new grid every day. Same one for everyone."}},"epoch":"2026-11-18","puzzles":[{"no":1,"date":"2026-11-18","w":11,"h":12,"words":[{"n":1,"dir":"across","row":0,"col":0,"answer":"KAAKAMUTTAI","enum":"(5,6)","kind":"film","ref":"f2124","clue":"2014 film by M. Manikandan with Aishwarya Rajesh and Silambarasan"},{"n":4,"dir":"across","row":2,"col":2,"answer":"JOHNVIJAY","enum":"(4,5)","kind":"star","ref":"nm3682633","clue":"Acted in Kabali (2016) and Thupparivaalan (2017)"},{"n":6,"dir":"across","row":4,"col":5,"answer":"SEKHAR","enum":"(6)","kind":"director","ref":"kg-q17074163","clue":"V. ___, directed Viralukketha Veekkam (1999) and Varavu Ettana Selavu Pathana (1994)"},{"n":8,"dir":"across","row":6,"col":0,"answer":"VELAIKKARAN","enum":"(11)","kind":"film","ref":"f2662","clue":"2017 film by M. Raja with Nayanthara and Sathish"},{"n":10,"dir":"across","row":10,"col":2,"answer":"MADHUREY","enum":"(8)","kind":"film","ref":"f1190","clue":"2004 film by Ramana Madhesh with Vijay and Pasupathy"},{"n":2,"dir":"down","row":0,"col":5,"answer":"MUNISHKANTH","enum":"(11)","kind":"star","ref":"nm6106368","clue":"Acted in Maharaja (2024) and Raatchasan (2017)"},{"n":3,"dir":"down","row":0,"col":9,"answer":"AMALAPAUL","enum":"(5,4)","kind":"star","ref":"nm3898762","clue":"Acted in Raatchasan (2017) and Thalaivaa (2013)"},{"n":5,"dir":"down","row":3,"col":1,"answer":"DHEEPAN","enum":"(7)","kind":"film","ref":"f2244","clue":"2015 film by Jacques Audiard with Kalieaswari Srinivasan and Antonythasan Jesuthasan"},{"n":7,"dir":"down","row":5,"col":3,"answer":"SATHYA","enum":"(6)","kind":"music","ref":"kg-q5006852","clue":"C. ___, music for Kanchana 2 (2015) and Engaeyum Eppothum (2011)"},{"n":9,"dir":"down","row":8,"col":7,"answer":"AARU","enum":"(4)","kind":"film","ref":"f1220","clue":"2005 film by Hari with Suriya and Trisha"}]},{"no":2,"date":"2026-11-19","w":11,"h":12,"words":[{"n":4,"dir":"across","row":1,"col":1,"answer":"VIDYASAGAR","enum":"(10)","kind":"music","ref":"kg-q3595530","clue":"Music for Anbe Sivam (2003) and Ghilli (2004)"},{"n":5,"dir":"across","row":3,"col":4,"answer":"JAYARAM","enum":"(7)","kind":"star","ref":"nm0419688","clue":"Acted in Thuppakki (2012) and Ponniyin Selvan: I (2022)"},{"n":6,"dir":"across","row":6,"col":0,"answer":"TAANAKKARAN","enum":"(11)","kind":"film","ref":"f3005","clue":"2022 film with M.S. Bhaskar and Livingston"},{"n":7,"dir":"across","row":8,"col":6,"answer":"HARI","enum":"(4)","kind":"director","ref":"nm15035335","clue":"Directed Singam (2010) and Singam II (2013)"},{"n":8,"dir":"across","row":9,"col":0,"answer":"JOKER","enum":"(5)","kind":"film","ref":"f2421","clue":"2016 film by Raju Murugan with Guru Somasundaram and Bava Chelladurai"},{"n":9,"dir":"across","row":11,"col":0,"answer":"MYSSKIN","enum":"(7)","kind":"director","ref":"nm4199426","clue":"Directed Thupparivaalan (2017) and Psycho (2020)"},{"n":1,"dir":"down","row":0,"col":5,"answer":"KANAA","enum":"(5)","kind":"film","ref":"f2715","clue":"2018 film by Arunraja Kamaraj with Munishkanth and Aishwarya Rajesh"},{"n":2,"dir":"down","row":0,"col":7,"answer":"JAYAPRAKASH","enum":"(11)","kind":"star","ref":"nm1957308","clue":"V. ___, acted in Jai Bhim (2021) and Meiyazhagan (2024)"},{"n":3,"dir":"down","row":0,"col":9,"answer":"KALAIRANI","enum":"(9)","kind":"star","ref":"nm1468843","clue":"Acted in Mudhalvan (1999) and Youth (2002)"},{"n":4,"dir":"down","row":1,"col":1,"answer":"VIJAYANTONY","enum":"(5,6)","kind":"music","ref":"nm2537099","clue":"Music for Velayudham (2011) and Vettaikaaran (2009)"}]},{"no":3,"date":"2026-11-20","w":11,"h":12,"words":[{"n":1,"dir":"across","row":0,"col":3,"answer":"SIRPY","enum":"(5)","kind":"music","ref":"nm10100191","clue":"Music for Unnai Ninaithu (2002) and Selva (1996)"},{"n":4,"dir":"across","row":2,"col":0,"answer":"ANNIYAN","enum":"(7)","kind":"film","ref":"f1228","clue":"2005 film by Shankar with Vikram and Cochin Hanifa"},{"n":6,"dir":"across","row":4,"col":0,"answer":"NAADODIGAL","enum":"(10)","kind":"film","ref":"f1625","clue":"2009 film by Samuthirakani with V. Jayaprakash and Sasikumar"},{"n":8,"dir":"across","row":6,"col":0,"answer":"ROBOSHANKAR","enum":"(4,7)","kind":"star","ref":"nm5199559","clue":"Acted in The Legend (2022) and Viswasam (2019)"},{"n":9,"dir":"across","row":9,"col":0,"answer":"KARTHIKRAJA","enum":"(7,4)","kind":"music","ref":"kg-q3522294","clue":"Music for Kaathala Kaathala (1998) and Dumm Dumm Dumm (2001)"},{"n":10,"dir":"across","row":11,"col":0,"answer":"SIVAJI","enum":"(6)","kind":"film","ref":"f006","clue":"2007 film by Shankar with Rajinikanth and Cochin Hanifa"},{"n":2,"dir":"down","row":0,"col":6,"answer":"PANDIRAJ","enum":"(8)","kind":"director","ref":"kg-q7130647","clue":"Directed Kadaikutty Singam (2018) and Namma Veettu Pillai (2019)"},{"n":3,"dir":"down","row":1,"col":1,"answer":"ANNAPOORANI","enum":"(11)","kind":"film","ref":"f3023","clue":"2023 film with Nayanthara and Jai"},{"n":5,"dir":"down","row":3,"col":8,"answer":"RAJKIRAN","enum":"(3,5)","kind":"star","ref":"nm4363856","clue":"Acted in Kaavalan (2011) and Nandha (2001)"},{"n":7,"dir":"down","row":5,"col":10,"answer":"IRUVAR","enum":"(6)","kind":"film","ref":"f014","clue":"1997 film by Mani Ratnam with Prakash Raj and Nassar"}]},{"no":4,"date":"2026-11-21","w":11,"h":12,"words":[{"n":1,"dir":"across","row":0,"col":0,"answer":"EZHIL","enum":"(5)","kind":"director","ref":"kg-q5423269","clue":"Directed Thulladha Manamum Thullum (1999) and Poovellam Un Vasam (2001)"},{"n":5,"dir":"across","row":2,"col":0,"answer":"JIGARTHANDA","enum":"(11)","kind":"film","ref":"f2121","clue":"2014 film by Karthik Subbaraj with Karunakaran and Aadukalam Naren"},{"n":8,"dir":"across","row":6,"col":0,"answer":"SRIRANJANI","enum":"(10)","kind":"star","ref":"nm1560660","clue":"Acted in Pokkiri (2007) and House Owner (2019)"},{"n":9,"dir":"across","row":8,"col":1,"answer":"THALAIVAA","enum":"(9)","kind":"film","ref":"f2063","clue":"2013 film by A. L. Vijay with Vijay and Santhanam"},{"n":10,"dir":"across","row":10,"col":1,"answer":"BHARATH","enum":"(7)","kind":"star","ref":"nm1467000","clue":"Acted in Spyder (2017) and Boys (2003)"},{"n":2,"dir":"down","row":0,"col":3,"answer":"ILAIYARAAJA","enum":"(11)","kind":"music","ref":"kg-q2720141","clue":"Music for Nayakan (1987) and Thalapathi (1991)"},{"n":3,"dir":"down","row":0,"col":10,"answer":"DEAR","enum":"(4)","kind":"film","ref":"f3096","clue":"2024 film with Kaali Venkat and Aishwarya Rajesh"},{"n":4,"dir":"down","row":1,"col":7,"answer":"RAMANA","enum":"(6)","kind":"film","ref":"f1045","clue":"2002 film by A.R. Murugadoss with Simran and Riyaz Khan"},{"n":6,"dir":"down","row":2,"col":5,"answer":"THAANDAVAM","enum":"(10)","kind":"film","ref":"f1963","clue":"2012 film by A. L. Vijay with Vikram and Santhanam"},{"n":7,"dir":"down","row":4,"col":9,"answer":"SRIMAN","enum":"(6)","kind":"star","ref":"nm1417060","clue":"Acted in Pokkiri (2007) and Billa II (2012)"}]},{"no":5,"date":"2026-11-22","w":11,"h":12,"words":[{"n":1,"dir":"across","row":0,"col":1,"answer":"VADIVELU","enum":"(8)","kind":"star","ref":"nm0883014","clue":"Acted in Mersal (2017) and Pokkiri (2007)"},{"n":4,"dir":"across","row":2,"col":6,"answer":"SEMBI","enum":"(5)","kind":"film","ref":"f3004","clue":"2022 film by Prabhu Solomon with Thambi Ramaiah and Gnanasambandan Gurunathan"},{"n":7,"dir":"across","row":6,"col":0,"answer":"PARTHIEPAN","enum":"(10)","kind":"director","ref":"kg-q7273911","clue":"R. ___, directed Otha Seruppu Size 7 (2019) and Kathai Thiraikathai Vasanam Iyakkam (2014)"},{"n":8,"dir":"across","row":8,"col":0,"answer":"PRABHUDEVA","enum":"(6,4)","kind":"star","ref":"nm0222150","clue":"Acted in Gentleman (1993) and Kadhalan (1994)"},{"n":9,"dir":"across","row":10,"col":3,"answer":"DHARAN","enum":"(6)","kind":"music","ref":"kg-q5269143","clue":"Music for Podaa Podi (2012) and Aaha Kalyanam (2014)"},{"n":1,"dir":"down","row":0,"col":1,"answer":"VETRIMAARAN","enum":"(11)","kind":"director","ref":"kg-q7923771","clue":"Directed Asuran (2019) and Vada Chennai (2018)"},{"n":2,"dir":"down","row":0,"col":3,"answer":"DHINA","enum":"(5)","kind":"music","ref":"kg-q5269579","clue":"Music for Jana (2004) and Thiruda Thirudi (2003)"},{"n":3,"dir":"down","row":0,"col":10,"answer":"JAILER","enum":"(6)","kind":"film","ref":"f3042","clue":"2023 film by Nelson Dilipkumar with Rajinikanth and Yogi Babu"},{"n":5,"dir":"down","row":2,"col":8,"answer":"MUDHALVAN","enum":"(9)","kind":"film","ref":"f815","clue":"1999 film by Shankar with Cochin Hanifa and Raghuvaran"},{"n":6,"dir":"down","row":3,"col":5,"answer":"SASIKUMAR","enum":"(9)","kind":"star","ref":"nm4241449","clue":"Acted in Tourist Family (2025) and Petta (2019)"}]},{"no":6,"date":"2026-11-23","w":10,"h":12,"words":[{"n":3,"dir":"across","row":1,"col":2,"answer":"SAMANTHA","enum":"(8)","kind":"star","ref":"nm3606487","clue":"Acted in Mersal (2017) and Kaththi (2014)"},{"n":6,"dir":"across","row":4,"col":5,"answer":"AASAI","enum":"(5)","kind":"film","ref":"f033","clue":"1995 film by Vasanth with Ajith and Prakash Raj"},{"n":8,"dir":"across","row":6,"col":1,"answer":"MARIMUTHU","enum":"(9)","kind":"star","ref":"nm2533953","clue":"G. ___, acted in Vikram (2022) and Pariyerum Perumal (2018)"},{"n":9,"dir":"across","row":8,"col":3,"answer":"VALIMAI","enum":"(7)","kind":"film","ref":"f3011","clue":"2022 film by H. Vinoth with Ajith and Yogi Babu"},{"n":10,"dir":"across","row":11,"col":0,"answer":"LINGUSAMY","enum":"(9)","kind":"director","ref":"kg-q6951701","clue":"N. ___, directed Anjaan (2014) and Paiyaa (2010)"},{"n":1,"dir":"down","row":0,"col":3,"answer":"JAGAN","enum":"(5)","kind":"star","ref":"nm3388887","clue":"Acted in Ayan (2009) and Ko (2011)"},{"n":2,"dir":"down","row":0,"col":8,"answer":"BHARATHWAJ","enum":"(10)","kind":"music","ref":"kg-q4901203","clue":"Music for Vasool Raja MBBS (2004) and Aasal (2010)"},{"n":4,"dir":"down","row":2,"col":1,"answer":"VIRUMAANDI","enum":"(10)","kind":"film","ref":"f1213","clue":"2004 film by Kamal Haasan with Kamal Haasan and Pasupathy"},{"n":5,"dir":"down","row":3,"col":6,"answer":"SAGUNI","enum":"(6)","kind":"film","ref":"f1955","clue":"2012 film by Shankar Dayal with Karthi and Santhanam"},{"n":7,"dir":"down","row":5,"col":4,"answer":"PISAASU","enum":"(7)","kind":"film","ref":"f2169","clue":"2014 film by Mysskin with Vinodhini Vaidynathan and Radha Ravi"}]},{"no":7,"date":"2026-11-24","w":11,"h":12,"words":[{"n":1,"dir":"across","row":0,"col":5,"answer":"TRISHA","enum":"(6)","kind":"star","ref":"nm1375534","clue":"Acted in Leo (2023) and '96 (2018)"},{"n":4,"dir":"across","row":2,"col":0,"answer":"ATTAHASAM","enum":"(9)","kind":"film","ref":"f1157","clue":"2004 film by Saran with Ajith and Ramesh Khanna"},{"n":6,"dir":"across","row":4,"col":3,"answer":"THAMAN","enum":"(6)","kind":"music","ref":"nm3888981","clue":"S. ___, music for Varisu (2023) and Kanchana (2011)"},{"n":8,"dir":"across","row":6,"col":0,"answer":"VIJAYAKUMAR","enum":"(11)","kind":"star","ref":"nm0897206","clue":"Acted in Baashha (1995) and Puli (2015)"},{"n":9,"dir":"across","row":10,"col":7,"answer":"SIVA","enum":"(4)","kind":"director","ref":"nm1686227","clue":"Directed Vivegam (2017) and Viswasam (2019)"},{"n":1,"dir":"down","row":0,"col":5,"answer":"THALAPATHI","enum":"(10)","kind":"film","ref":"f241","clue":"1991 film by Mani Ratnam with Rajinikanth and Charlie"},{"n":2,"dir":"down","row":1,"col":0,"answer":"KAALIVENKAT","enum":"(5,6)","kind":"star","ref":"nm6106360","clue":"Acted in Soorarai Pottru (2020) and Irudhi Suttru (2016)"},{"n":3,"dir":"down","row":1,"col":3,"answer":"KANTHASWAMY","enum":"(11)","kind":"film","ref":"f1606","clue":"2009 film by Susi Ganeshan with Vikram and Ashish Vidyarthi"},{"n":5,"dir":"down","row":2,"col":10,"answer":"SEANROLDAN","enum":"(4,6)","kind":"music","ref":"kg-q17073747","clue":"Music for Jai Bhim (2021) and Tourist Family (2025)"},{"n":7,"dir":"down","row":4,"col":7,"answer":"ARULDOSS","enum":"(8)","kind":"star","ref":"nm4725798","clue":"Acted in Maharaja (2024) and Peranbu (2017)"}]},{"no":8,"date":"2026-11-25","w":11,"h":12,"words":[{"n":2,"dir":"across","row":0,"col":3,"answer":"AATHI","enum":"(5)","kind":"film","ref":"f1300","clue":"2006 film by Ramana with Vijay and Trisha"},{"n":7,"dir":"across","row":4,"col":0,"answer":"KARUNAKARAN","enum":"(11)","kind":"star","ref":"nm5369429","clue":"Acted in Meiyazhagan (2024) and Vivegam (2017)"},{"n":8,"dir":"across","row":6,"col":0,"answer":"MANISHARMA","enum":"(4,6)","kind":"music","ref":"kg-q6749421","clue":"Music for Pokkiri (2007) and Sura (2010)"},{"n":9,"dir":"across","row":8,"col":3,"answer":"BALA","enum":"(4)","kind":"director","ref":"kg-q3429883","clue":"Directed Pithamagan (2003) and Sethu (1999)"},{"n":10,"dir":"across","row":11,"col":5,"answer":"AADAI","enum":"(5)","kind":"film","ref":"f028","clue":"2019 film by Rathna Kumar with Sriranjani and Amala Paul"},{"n":1,"dir":"down","row":0,"col":1,"answer":"MADHAVAN","enum":"(8)","kind":"star","ref":"nm0534856","clue":"Acted in Vikram Vedha (2017) and Anbe Sivam (2003)"},{"n":3,"dir":"down","row":0,"col":4,"answer":"ARVINDSWAMY","enum":"(6,5)","kind":"star","ref":"nm0841552","clue":"Acted in Meiyazhagan (2024) and Thani Oruvan (2015)"},{"n":4,"dir":"down","row":0,"col":10,"answer":"ROHINI","enum":"(6)","kind":"star","ref":"nm0737513","clue":"Acted in Baahubali: The Beginning (2015) and 24 (2016)"},{"n":5,"dir":"down","row":1,"col":8,"answer":"VIKRAMVEDHA","enum":"(6,5)","kind":"film","ref":"f010","clue":"2017 film by Gayatri with Vijay Sethupathi and Madhavan"},{"n":6,"dir":"down","row":2,"col":6,"answer":"VIKRAMAN","enum":"(8)","kind":"director","ref":"kg-q12989013","clue":"Directed Poove Unakkaga (1996) and Unnai Ninaithu (2002)"}]},{"no":9,"date":"2026-11-26","w":11,"h":11,"words":[{"n":2,"dir":"across","row":0,"col":3,"answer":"ABBAS","enum":"(5)","kind":"star","ref":"nm0007806","clue":"Acted in Padayappa (1999) and Kandukondain Kandukondain (2000)"},{"n":5,"dir":"across","row":2,"col":0,"answer":"LIVINGSTON","enum":"(10)","kind":"star","ref":"nm1679054","clue":"Acted in Peranbu (2017) and Maareesan (2025)"},{"n":7,"dir":"across","row":5,"col":0,"answer":"MUNISHKANTH","enum":"(11)","kind":"star","ref":"nm6106368","clue":"Acted in Maharaja (2024) and Raatchasan (2017)"},{"n":8,"dir":"across","row":7,"col":5,"answer":"SARKAR","enum":"(6)","kind":"film","ref":"f2763","clue":"2018 film by A.R. Murugadoss with Vijay and Yogi Babu"},{"n":9,"dir":"across","row":9,"col":0,"answer":"DEVA","enum":"(4)","kind":"music","ref":"kg-q3424313","clue":"Music for Baashha (1995) and Kushi (2000)"},{"n":10,"dir":"across","row":10,"col":4,"answer":"PERANBU","enum":"(7)","kind":"film","ref":"f2620","clue":"2017 film by Ram with Samuthirakani and Aruldoss"},{"n":1,"dir":"down","row":0,"col":1,"answer":"CHIMBUDEVEN","enum":"(6,5)","kind":"director","ref":"kg-q5099316","clue":"Directed Puli (2015) and Imsai Arasan 23m Pulikesi (2006)"},{"n":3,"dir":"down","row":0,"col":7,"answer":"SATHYAPRIYA","enum":"(11)","kind":"star","ref":"nm2937208","clue":"Acted in Baashha (1995) and Rajavin Parvaiyile (1995)"},{"n":4,"dir":"down","row":0,"col":9,"answer":"MANKATHA","enum":"(8)","kind":"film","ref":"f1828","clue":"2011 film by Venkat Prabhu with Trisha and Ajith"},{"n":6,"dir":"down","row":2,"col":3,"answer":"IRAIVI","enum":"(6)","kind":"film","ref":"f2415","clue":"2016 film by Karthik Subbaraj with Vijay Sethupathi and Karunakaran"}]},{"no":10,"date":"2026-11-27","w":11,"h":12,"words":[{"n":2,"dir":"across","row":0,"col":3,"answer":"JYOTHIKA","enum":"(8)","kind":"star","ref":"nm0433392","clue":"Acted in Vettaiyaadu Vilaiyaadu (2006) and Chandramukhi (2005)"},{"n":3,"dir":"across","row":2,"col":0,"answer":"VIDYASAGAR","enum":"(10)","kind":"music","ref":"kg-q3595530","clue":"Music for Anbe Sivam (2003) and Ghilli (2004)"},{"n":6,"dir":"across","row":6,"col":0,"answer":"VIJAYANTONY","enum":"(5,6)","kind":"music","ref":"nm2537099","clue":"Music for Velayudham (2011) and Vettaikaaran (2009)"},{"n":8,"dir":"across","row":9,"col":4,"answer":"GUNA","enum":"(4)","kind":"film","ref":"f204","clue":"1991 film by Santhana Bharathi with Kamal Haasan and Rekha"},{"n":9,"dir":"across","row":11,"col":2,"answer":"RAVIKUMAR","enum":"(9)","kind":"director","ref":"nm0433893","clue":"K.S. ___, directed Dasavathaaram (2008) and Padayappa (1999)"},{"n":1,"dir":"down","row":0,"col":0,"answer":"VIVEK","enum":"(5)","kind":"star","ref":"nm0900266","clue":"Acted in Bigil (2019) and Anniyan (2005)"},{"n":2,"dir":"down","row":0,"col":3,"answer":"JAYAMRAVI","enum":"(5,4)","kind":"star","ref":"nm1865947","clue":"Acted in Ponniyin Selvan: I (2022) and Thani Oruvan (2015)"},{"n":4,"dir":"down","row":2,"col":5,"answer":"SINGAMPULI","enum":"(10)","kind":"star","ref":"nm2670388","clue":"Acted in Maharaja (2024) and The Legend (2022)"},{"n":5,"dir":"down","row":5,"col":1,"answer":"SIREN","enum":"(5)","kind":"film","ref":"f3116","clue":"2024 film with Jayam Ravi and Samuthirakani"},{"n":7,"dir":"down","row":6,"col":9,"answer":"NANDHA","enum":"(6)","kind":"film","ref":"f964","clue":"2001 film by Bala with Suriya and Karunas"}]},{"no":11,"date":"2026-11-28","w":11,"h":12,"words":[{"n":1,"dir":"across","row":0,"col":3,"answer":"SIRPY","enum":"(5)","kind":"music","ref":"nm10100191","clue":"Music for Unnai Ninaithu (2002) and Selva (1996)"},{"n":5,"dir":"across","row":2,"col":0,"answer":"MANIRATNAM","enum":"(4,6)","kind":"director","ref":"kg-q174648","clue":"Directed Ponniyin Selvan: I (2022) and Nayakan (1987)"},{"n":7,"dir":"across","row":4,"col":1,"answer":"AYALAAN","enum":"(7)","kind":"film","ref":"f3091","clue":"2024 film by R. Ravikumar with Karunakaran and Yogi Babu"},{"n":8,"dir":"across","row":6,"col":0,"answer":"NAYANTHARA","enum":"(10)","kind":"star","ref":"nm1521381","clue":"Acted in Bigil (2019) and Thani Oruvan (2015)"},{"n":9,"dir":"across","row":8,"col":0,"answer":"MAYAVAN","enum":"(7)","kind":"film","ref":"f2597","clue":"2017 film by C.V. Kumar with Mime Gopi and Daniel Balaji"},{"n":10,"dir":"across","row":10,"col":5,"answer":"REGINA","enum":"(6)","kind":"film","ref":"f3068","clue":"2023 film with Vivek Prasanna and Gajaraj"},{"n":2,"dir":"down","row":0,"col":6,"answer":"PETTA","enum":"(5)","kind":"film","ref":"f011","clue":"2019 film by Karthik Subbaraj with Rajinikanth and Vijay Sethupathi"},{"n":3,"dir":"down","row":0,"col":9,"answer":"KAMALHAASAN","enum":"(5,6)","kind":"star","ref":"nm0352032","clue":"Acted in Vikram (2022) and Leo (2023)"},{"n":4,"dir":"down","row":1,"col":1,"answer":"KALAKALAPPU","enum":"(11)","kind":"film","ref":"f1912","clue":"2012 film by Sundar C. with John Vijay and Santhanam"},{"n":6,"dir":"down","row":2,"col":3,"answer":"ILAVARASU","enum":"(9)","kind":"star","ref":"nm0369696","clue":"Acted in Anbe Sivam (2003) and Parking (2023)"}]},{"no":12,"date":"2026-11-29","w":11,"h":11,"words":[{"n":3,"dir":"across","row":1,"col":3,"answer":"AARU","enum":"(4)","kind":"film","ref":"f1220","clue":"2005 film by Hari with Suriya and Trisha"},{"n":6,"dir":"across","row":3,"col":0,"answer":"RAJKUMAR","enum":"(8)","kind":"music","ref":"kg-q7387343","clue":"S.A. ___, music for Poove Unakkaga (1996) and Thulladha Manamum Thullum (1999)"},{"n":8,"dir":"across","row":5,"col":0,"answer":"HEYSINAMIKA","enum":"(3,8)","kind":"film","ref":"f2988","clue":"2022 film by Brinda with Yogi Babu and Kajal Aggarwal"},{"n":9,"dir":"across","row":7,"col":5,"answer":"SURIYA","enum":"(6)","kind":"star","ref":"nm1421814","clue":"Acted in Jai Bhim (2021) and Soorarai Pottru (2020)"},{"n":10,"dir":"across","row":10,"col":0,"answer":"ILAIYARAAJA","enum":"(11)","kind":"music","ref":"kg-q2720141","clue":"Music for Nayakan (1987) and Thalapathi (1991)"},{"n":1,"dir":"down","row":0,"col":1,"answer":"ARYA","enum":"(4)","kind":"star","ref":"nm1951127","clue":"Acted in Arrambam (2013) and Kaappaan (2019)"},{"n":2,"dir":"down","row":0,"col":3,"answer":"KAAKISATTAI","enum":"(5,6)","kind":"film","ref":"f2261","clue":"2015 film by R. S. Durai Senthilkumar with Manobala and Mayilsamy"},{"n":4,"dir":"down","row":1,"col":6,"answer":"UDAYAKUMAR","enum":"(10)","kind":"director","ref":"nm7745984","clue":"R.V. ___, directed Yejaman (1993) and Singaravelan (1992)"},{"n":5,"dir":"down","row":2,"col":10,"answer":"PADAYAPPA","enum":"(9)","kind":"film","ref":"f825","clue":"1999 film by K.S. Ravikumar with Rajinikanth and Nassar"},{"n":7,"dir":"down","row":4,"col":8,"answer":"BIGIL","enum":"(5)","kind":"film","ref":"f2813","clue":"2019 film by Atlee with Vijay and Nayanthara"}]},{"no":13,"date":"2026-11-30","w":11,"h":12,"words":[{"n":3,"dir":"across","row":1,"col":0,"answer":"THAANDAVAM","enum":"(10)","kind":"film","ref":"f1963","clue":"2012 film by A. L. Vijay with Vikram and Santhanam"},{"n":5,"dir":"across","row":4,"col":0,"answer":"SEKHAR","enum":"(6)","kind":"director","ref":"kg-q17074163","clue":"V. ___, directed Viralukketha Veekkam (1999) and Varavu Ettana Selavu Pathana (1994)"},{"n":6,"dir":"across","row":6,"col":0,"answer":"PRAKASHRAJ","enum":"(7,3)","kind":"star","ref":"nm0695177","clue":"Acted in Jai Bhim (2021) and Varisu (2023)"},{"n":8,"dir":"across","row":8,"col":2,"answer":"TAMANNAAH","enum":"(9)","kind":"star","ref":"nm1961459","clue":"Acted in Baahubali: The Beginning (2015) and Jailer (2023)"},{"n":9,"dir":"across","row":11,"col":4,"answer":"DHARANI","enum":"(7)","kind":"director","ref":"nm6646790","clue":"Directed Ghilli (2004) and Kuruvi (2008)"},{"n":1,"dir":"down","row":0,"col":3,"answer":"KARTHIKRAJA","enum":"(7,4)","kind":"music","ref":"kg-q3522294","clue":"Music for Kaathala Kaathala (1998) and Dumm Dumm Dumm (2001)"},{"n":2,"dir":"down","row":0,"col":8,"answer":"RAGHUVARAN","enum":"(10)","kind":"star","ref":"nm0706499","clue":"Acted in Sivaji (2007) and Baashha (1995)"},{"n":4,"dir":"down","row":3,"col":5,"answer":"PRASHANTH","enum":"(9)","kind":"star","ref":"nm0695286","clue":"Acted in Jeans (1998) and Thiruda Thiruda (1993)"},{"n":6,"dir":"down","row":6,"col":0,"answer":"PIZZA","enum":"(5)","kind":"film","ref":"f1951","clue":"2012 film by Karthik Subbaraj with Vijay Sethupathi and Karunakaran"},{"n":7,"dir":"down","row":7,"col":10,"answer":"THERI","enum":"(5)","kind":"film","ref":"f2508","clue":"2016 film by Atlee with Vijay and Motta Rajendran"}]},{"no":14,"date":"2026-12-01","w":11,"h":12,"words":[{"n":1,"dir":"across","row":0,"col":1,"answer":"MIMEGOPI","enum":"(4,4)","kind":"star","ref":"nm6504384","clue":"Acted in Kabali (2016) and Bairavaa (2017)"},{"n":3,"dir":"across","row":2,"col":6,"answer":"BADRI","enum":"(5)","kind":"film","ref":"f931","clue":"2001 film by P. A. Arun Prasad with Vijay and Dhamu"},{"n":6,"dir":"across","row":4,"col":2,"answer":"INDIAN","enum":"(6)","kind":"film","ref":"f3101","clue":"2024 film by Shankar with Kamal Haasan and Samuthirakani"},{"n":7,"dir":"across","row":6,"col":0,"answer":"THIRUMALAI","enum":"(10)","kind":"film","ref":"f1138","clue":"2003 film by Ramana with Vijay and Jyothika"},{"n":8,"dir":"across","row":8,"col":0,"answer":"DHANUSH","enum":"(7)","kind":"star","ref":"nm1333687","clue":"Acted in Asuran (2019) and Karnan (2021)"},{"n":9,"dir":"across","row":10,"col":1,"answer":"MURUGADOSS","enum":"(10)","kind":"director","ref":"nm1436693","clue":"A.R. ___, directed Thuppakki (2012) and Kaththi (2014)"},{"n":2,"dir":"down","row":0,"col":3,"answer":"MAHENDRAN","enum":"(9)","kind":"star","ref":"nm1559594","clue":"Y.G. ___, acted in Thalaivaa (2013) and Deiva Thirumagal (2011)"},{"n":3,"dir":"down","row":2,"col":6,"answer":"BHARATHWAJ","enum":"(10)","kind":"music","ref":"kg-q4901203","clue":"Music for Vasool Raja MBBS (2004) and Aasal (2010)"},{"n":4,"dir":"down","row":2,"col":9,"answer":"RADHIKA","enum":"(7)","kind":"star","ref":"nm0704654","clue":"Acted in Theri (2016) and Love Today (2022)"},{"n":5,"dir":"down","row":3,"col":0,"answer":"CUSTODY","enum":"(7)","kind":"film","ref":"f3033","clue":"2023 film by Venkat Prabhu with Sampath Raj and Arvind Swamy"}]},{"no":15,"date":"2026-12-02","w":11,"h":12,"words":[{"n":1,"dir":"across","row":0,"col":1,"answer":"BHAGYARAJ","enum":"(9)","kind":"star","ref":"nm0080180","clue":"Acted in Dada (2023) and Thupparivaalan (2017)"},{"n":5,"dir":"across","row":4,"col":2,"answer":"SATHISH","enum":"(7)","kind":"star","ref":"nm3951906","clue":"Acted in Kaththi (2014) and Bairavaa (2017)"},{"n":7,"dir":"across","row":6,"col":0,"answer":"VETRIMAARAN","enum":"(11)","kind":"director","ref":"kg-q7923771","clue":"Directed Asuran (2019) and Vada Chennai (2018)"},{"n":9,"dir":"across","row":10,"col":2,"answer":"KALAIRANI","enum":"(9)","kind":"star","ref":"nm1468843","clue":"Acted in Mudhalvan (1999) and Youth (2002)"},{"n":2,"dir":"down","row":0,"col":5,"answer":"YOUTH","enum":"(5)","kind":"film","ref":"f1065","clue":"2002 film by Vincent Selva with Vijay and Cochin Hanifa"},{"n":3,"dir":"down","row":0,"col":7,"answer":"ROBOSHANKAR","enum":"(4,7)","kind":"star","ref":"nm5199559","clue":"Acted in The Legend (2022) and Viswasam (2019)"},{"n":4,"dir":"down","row":2,"col":3,"answer":"SEANROLDAN","enum":"(4,6)","kind":"music","ref":"kg-q17073747","clue":"Music for Jai Bhim (2021) and Tourist Family (2025)"},{"n":6,"dir":"down","row":4,"col":10,"answer":"SINGAMII","enum":"(6,2)","kind":"film","ref":"f2055","clue":"2013 film by Hari with Suriya and Santhanam"},{"n":7,"dir":"down","row":6,"col":0,"answer":"VETTAI","enum":"(6)","kind":"film","ref":"f1972","clue":"2012 film by N. Lingusamy with Arya and Madhavan"},{"n":8,"dir":"down","row":6,"col":5,"answer":"MERSAL","enum":"(6)","kind":"film","ref":"f020","clue":"2017 film by Atlee with Vijay and Motta Rajendran"}]},{"no":16,"date":"2026-12-03","w":11,"h":11,"words":[{"n":5,"dir":"across","row":1,"col":0,"answer":"HARI","enum":"(4)","kind":"director","ref":"nm15035335","clue":"Directed Singam (2010) and Singam II (2013)"},{"n":7,"dir":"across","row":3,"col":0,"answer":"JIGARTHANDA","enum":"(11)","kind":"film","ref":"f2121","clue":"2014 film by Karthik Subbaraj with Karunakaran and Aadukalam Naren"},{"n":8,"dir":"across","row":6,"col":0,"answer":"KARUNAKARAN","enum":"(11)","kind":"star","ref":"nm5369429","clue":"Acted in Meiyazhagan (2024) and Vivegam (2017)"},{"n":10,"dir":"across","row":9,"col":0,"answer":"MAANAGARAM","enum":"(10)","kind":"film","ref":"f2590","clue":"2017 film by Lokesh Kanagaraj with Munishkanth and Charlie"},{"n":1,"dir":"down","row":0,"col":1,"answer":"MANISHARMA","enum":"(4,6)","kind":"music","ref":"kg-q6749421","clue":"Music for Pokkiri (2007) and Sura (2010)"},{"n":2,"dir":"down","row":0,"col":3,"answer":"VIJAY","enum":"(5)","kind":"star","ref":"nm0897201","clue":"Acted in Master (2021) and Leo (2023)"},{"n":3,"dir":"down","row":0,"col":8,"answer":"THANIORUVAN","enum":"(5,6)","kind":"film","ref":"f2332","clue":"2015 film by M. Raja with Nayanthara and Jayam Ravi"},{"n":4,"dir":"down","row":0,"col":10,"answer":"TARAMANI","enum":"(8)","kind":"film","ref":"f2642","clue":"2017 film by Ram with Azhagam Perumal and Anjali"},{"n":6,"dir":"down","row":1,"col":5,"answer":"SATHYA","enum":"(6)","kind":"music","ref":"kg-q5006852","clue":"C. ___, music for Kanchana 2 (2015) and Engaeyum Eppothum (2011)"},{"n":9,"dir":"down","row":6,"col":6,"answer":"KANAA","enum":"(5)","kind":"film","ref":"f2715","clue":"2018 film by Arunraja Kamaraj with Munishkanth and Aishwarya Rajesh"}]},{"no":17,"date":"2026-12-04","w":11,"h":12,"words":[{"n":2,"dir":"across","row":1,"col":0,"answer":"ARVINDSWAMY","enum":"(6,5)","kind":"star","ref":"nm0841552","clue":"Acted in Meiyazhagan (2024) and Thani Oruvan (2015)"},{"n":6,"dir":"across","row":4,"col":0,"answer":"RAJARANI","enum":"(4,4)","kind":"film","ref":"f034","clue":"2013 film by Atlee with Nayanthara and Sathyan"},{"n":8,"dir":"across","row":6,"col":0,"answer":"THEVARMAGAN","enum":"(6,5)","kind":"film","ref":"f325","clue":"1992 film by Bharathan with Kamal Haasan and Nassar"},{"n":9,"dir":"across","row":8,"col":3,"answer":"DHINA","enum":"(5)","kind":"music","ref":"kg-q5269579","clue":"Music for Jana (2004) and Thiruda Thirudi (2003)"},{"n":10,"dir":"across","row":10,"col":2,"answer":"SANTHANAM","enum":"(9)","kind":"star","ref":"nm1962272","clue":"Acted in Enthiran (2010) and I (2015)"},{"n":1,"dir":"down","row":0,"col":3,"answer":"VIKRAMVEDHA","enum":"(6,5)","kind":"film","ref":"f010","clue":"2017 film by Gayatri with Vijay Sethupathi and Madhavan"},{"n":3,"dir":"down","row":1,"col":1,"answer":"REVATHI","enum":"(7)","kind":"star","ref":"nm0720763","clue":"Acted in Thevar Magan (1992) and Iruvar (1997)"},{"n":4,"dir":"down","row":1,"col":5,"answer":"DEVA","enum":"(4)","kind":"music","ref":"kg-q3424313","clue":"Music for Baashha (1995) and Kushi (2000)"},{"n":5,"dir":"down","row":3,"col":7,"answer":"VISARANAI","enum":"(9)","kind":"film","ref":"f017","clue":"2015 film by Vetrimaaran with Samuthirakani and Kishore Kumar G."},{"n":7,"dir":"down","row":5,"col":9,"answer":"GARUDAN","enum":"(7)","kind":"film","ref":"f3098","clue":"2024 film by R. S. Durai Senthilkumar with Samuthirakani and Soori"}]},{"no":18,"date":"2026-12-05","w":11,"h":12,"words":[{"n":4,"dir":"across","row":2,"col":3,"answer":"RAJKIRAN","enum":"(3,5)","kind":"star","ref":"nm4363856","clue":"Acted in Kaavalan (2011) and Nandha (2001)"},{"n":6,"dir":"across","row":4,"col":1,"answer":"RADHARAVI","enum":"(5,4)","kind":"star","ref":"nm1099597","clue":"Acted in Raatchasan (2017) and Vada Chennai (2018)"},{"n":7,"dir":"across","row":6,"col":0,"answer":"SRIRANJANI","enum":"(10)","kind":"star","ref":"nm1560660","clue":"Acted in Pokkiri (2007) and House Owner (2019)"},{"n":8,"dir":"across","row":8,"col":6,"answer":"UTURN","enum":"(1,4)","kind":"film","ref":"f2785","clue":"2018 film by Pawan Kumar with Aadukalam Naren and Samantha"},{"n":9,"dir":"across","row":11,"col":0,"answer":"IRUVAR","enum":"(6)","kind":"film","ref":"f014","clue":"1997 film by Mani Ratnam with Prakash Raj and Nassar"},{"n":1,"dir":"down","row":0,"col":9,"answer":"VAALI","enum":"(5)","kind":"film","ref":"f852","clue":"1999 film by S. J. Surya with Ajith and Jyothika"},{"n":2,"dir":"down","row":1,"col":4,"answer":"SATHYAPRIYA","enum":"(11)","kind":"star","ref":"nm2937208","clue":"Acted in Baashha (1995) and Rajavin Parvaiyile (1995)"},{"n":3,"dir":"down","row":1,"col":7,"answer":"VIJAYANTONY","enum":"(5,6)","kind":"music","ref":"nm2537099","clue":"Music for Velayudham (2011) and Vettaikaaran (2009)"},{"n":5,"dir":"down","row":3,"col":2,"answer":"VARISU","enum":"(6)","kind":"film","ref":"f3081","clue":"2023 film by Vamsi Paidipally with Vijay and Yogi Babu"},{"n":7,"dir":"down","row":6,"col":0,"answer":"SIVA","enum":"(4)","kind":"director","ref":"nm1686227","clue":"Directed Vivegam (2017) and Viswasam (2019)"}]},{"no":19,"date":"2026-12-06","w":11,"h":12,"words":[{"n":2,"dir":"across","row":1,"col":3,"answer":"MIRUTHAN","enum":"(8)","kind":"film","ref":"f2457","clue":"2016 film by Shakti Soundar Rajan with Jayam Ravi and Kaali Venkat"},{"n":6,"dir":"across","row":4,"col":2,"answer":"DEAR","enum":"(4)","kind":"film","ref":"f3096","clue":"2024 film with Kaali Venkat and Aishwarya Rajesh"},{"n":8,"dir":"across","row":6,"col":0,"answer":"KAALIVENKAT","enum":"(5,6)","kind":"star","ref":"nm6106360","clue":"Acted in Soorarai Pottru (2020) and Irudhi Suttru (2016)"},{"n":9,"dir":"across","row":8,"col":2,"answer":"ARULDOSS","enum":"(8)","kind":"star","ref":"nm4725798","clue":"Acted in Maharaja (2024) and Peranbu (2017)"},{"n":10,"dir":"across","row":10,"col":0,"answer":"THAMAN","enum":"(6)","kind":"music","ref":"nm3888981","clue":"S. ___, music for Varisu (2023) and Kanchana (2011)"},{"n":1,"dir":"down","row":0,"col":9,"answer":"KAMALHAASAN","enum":"(5,6)","kind":"star","ref":"nm0352032","clue":"Acted in Vikram (2022) and Leo (2023)"},{"n":3,"dir":"down","row":2,"col":0,"answer":"MYSSKIN","enum":"(7)","kind":"director","ref":"nm4199426","clue":"Directed Thupparivaalan (2017) and Psycho (2020)"},{"n":4,"dir":"down","row":2,"col":2,"answer":"VIDYASAGAR","enum":"(10)","kind":"music","ref":"kg-q3595530","clue":"Music for Anbe Sivam (2003) and Ghilli (2004)"},{"n":5,"dir":"down","row":3,"col":4,"answer":"SASIKUMAR","enum":"(9)","kind":"star","ref":"nm4241449","clue":"Acted in Tourist Family (2025) and Petta (2019)"},{"n":7,"dir":"down","row":4,"col":7,"answer":"RANGOLI","enum":"(7)","kind":"film","ref":"f3067","clue":"2023 film by Vaali Mohan Das with Murugadass and Amit Bhargav"}]},{"no":20,"date":"2026-12-07","w":11,"h":11,"words":[{"n":1,"dir":"across","row":0,"col":3,"answer":"RAHMAN","enum":"(6)","kind":"music","ref":"kg-q108560","clue":"A.R. ___, music for Mersal (2017) and Enthiran (2010)"},{"n":6,"dir":"across","row":3,"col":3,"answer":"MAHANADI","enum":"(8)","kind":"film","ref":"f440","clue":"1994 film by Santhana Bharathi with Kamal Haasan and Cochin Hanifa"},{"n":7,"dir":"across","row":5,"col":0,"answer":"JAYAPRAKASH","enum":"(11)","kind":"star","ref":"nm1957308","clue":"V. ___, acted in Jai Bhim (2021) and Meiyazhagan (2024)"},{"n":9,"dir":"across","row":8,"col":1,"answer":"MAAREESAN","enum":"(9)","kind":"film","ref":"f3133","clue":"2025 film by Sudheesh Sankar with Livingston and Vadivelu"},{"n":10,"dir":"across","row":10,"col":3,"answer":"CHARLIE","enum":"(7)","kind":"star","ref":"nm1706602","clue":"Acted in 24 (2016) and Anniyan (2005)"},{"n":2,"dir":"down","row":0,"col":6,"answer":"MUGAVAREE","enum":"(9)","kind":"film","ref":"f890","clue":"2000 film by V. Z. Durai with Ajith and Jyothika"},{"n":3,"dir":"down","row":1,"col":1,"answer":"UDAYAKUMAR","enum":"(10)","kind":"director","ref":"nm7745984","clue":"R.V. ___, directed Yejaman (1993) and Singaravelan (1992)"},{"n":4,"dir":"down","row":1,"col":10,"answer":"JAIBHIM","enum":"(3,4)","kind":"film","ref":"f2953","clue":"2021 film by T. J. Gnanavel with Suriya and V. Jayaprakash"},{"n":5,"dir":"down","row":2,"col":8,"answer":"JAYAMRAVI","enum":"(5,4)","kind":"star","ref":"nm1865947","clue":"Acted in Ponniyin Selvan: I (2022) and Thani Oruvan (2015)"},{"n":8,"dir":"down","row":5,"col":3,"answer":"ARYA","enum":"(4)","kind":"star","ref":"nm1951127","clue":"Acted in Arrambam (2013) and Kaappaan (2019)"}]},{"no":21,"date":"2026-12-08","w":11,"h":12,"words":[{"n":3,"dir":"across","row":1,"col":1,"answer":"ILAVARASU","enum":"(9)","kind":"star","ref":"nm0369696","clue":"Acted in Anbe Sivam (2003) and Parking (2023)"},{"n":4,"dir":"across","row":3,"col":4,"answer":"SIRPY","enum":"(5)","kind":"music","ref":"nm10100191","clue":"Music for Unnai Ninaithu (2002) and Selva (1996)"},{"n":6,"dir":"across","row":4,"col":0,"answer":"MAYA","enum":"(4)","kind":"film","ref":"f2286","clue":"2015 film by Ashwin Saravanan with Nayanthara and Mime Gopi"},{"n":8,"dir":"across","row":6,"col":0,"answer":"PARANTHUPO","enum":"(8,2)","kind":"film","ref":"f3138","clue":"2025 film by Ram with Anjali and Shiva"},{"n":9,"dir":"across","row":8,"col":0,"answer":"THANGAMAGAN","enum":"(6,5)","kind":"film","ref":"f2331","clue":"2015 film by Velraj with Dhanush and Sathish"},{"n":10,"dir":"across","row":11,"col":3,"answer":"SURIYA","enum":"(6)","kind":"star","ref":"nm1421814","clue":"Acted in Jai Bhim (2021) and Soorarai Pottru (2020)"},{"n":1,"dir":"down","row":0,"col":2,"answer":"ILAIYARAAJA","enum":"(11)","kind":"music","ref":"kg-q2720141","clue":"Music for Nayakan (1987) and Thalapathi (1991)"},{"n":2,"dir":"down","row":0,"col":5,"answer":"MANIRATNAM","enum":"(4,6)","kind":"director","ref":"kg-q174648","clue":"Directed Ponniyin Selvan: I (2022) and Nayakan (1987)"},{"n":5,"dir":"down","row":3,"col":7,"answer":"PASUPATHY","enum":"(9)","kind":"star","ref":"nm1367730","clue":"Acted in Asuran (2019) and Kannathil Muthamittal (2002)"},{"n":7,"dir":"down","row":4,"col":9,"answer":"THODARI","enum":"(7)","kind":"film","ref":"f2510","clue":"2016 film by Prabhu Solomon with Dhanush and Karunakaran"}]},{"no":22,"date":"2026-12-09","w":11,"h":11,"words":[{"n":3,"dir":"across","row":1,"col":2,"answer":"THALAIVAA","enum":"(9)","kind":"film","ref":"f2063","clue":"2013 film by A. L. Vijay with Vijay and Santhanam"},{"n":5,"dir":"across","row":3,"col":0,"answer":"DHARAN","enum":"(6)","kind":"music","ref":"kg-q5269143","clue":"Music for Podaa Podi (2012) and Aaha Kalyanam (2014)"},{"n":6,"dir":"across","row":5,"col":0,"answer":"BHARATHWAJ","enum":"(10)","kind":"music","ref":"kg-q4901203","clue":"Music for Vasool Raja MBBS (2004) and Aasal (2010)"},{"n":7,"dir":"across","row":7,"col":0,"answer":"BAASHHA","enum":"(7)","kind":"film","ref":"f503","clue":"1995 film by Suresh Krishna with Rajinikanth and Raghuvaran"},{"n":8,"dir":"across","row":10,"col":0,"answer":"AJITH","enum":"(5)","kind":"star","ref":"nm0015001","clue":"Acted in Valimai (2022) and Vivegam (2017)"},{"n":1,"dir":"down","row":0,"col":4,"answer":"BAGAVATHI","enum":"(9)","kind":"film","ref":"f1005","clue":"2002 film by A. Venkatesh with Vijay and Ashish Vidyarthi"},{"n":2,"dir":"down","row":0,"col":10,"answer":"KAALI","enum":"(5)","kind":"film","ref":"f2706","clue":"2018 film by Udhayanidhi Stalin with V. Jayaprakash and Yogi Babu"},{"n":3,"dir":"down","row":1,"col":2,"answer":"THALAPATHI","enum":"(10)","kind":"film","ref":"f241","clue":"1991 film by Mani Ratnam with Rajinikanth and Charlie"},{"n":4,"dir":"down","row":1,"col":8,"answer":"VAIYAPURI","enum":"(9)","kind":"star","ref":"nm1234717","clue":"Acted in Thulladha Manamum Thullum (1999) and Thirupaachi (2005)"},{"n":7,"dir":"down","row":7,"col":0,"answer":"BALA","enum":"(4)","kind":"director","ref":"kg-q3429883","clue":"Directed Pithamagan (2003) and Sethu (1999)"}]},{"no":23,"date":"2026-12-10","w":11,"h":11,"words":[{"n":4,"dir":"across","row":1,"col":2,"answer":"THAMIZHAN","enum":"(9)","kind":"film","ref":"f008","clue":"2002 film by Majith with Vijay and Ashish Vidyarthi"},{"n":5,"dir":"across","row":3,"col":0,"answer":"BOMBAY","enum":"(6)","kind":"film","ref":"f504","clue":"1995 film by Mani Ratnam with Prakash Raj and Nassar"},{"n":6,"dir":"across","row":3,"col":7,"answer":"NOTA","enum":"(4)","kind":"film","ref":"f2742","clue":"2018 film by Anand Shankar with Nassar and M.S. Bhaskar"},{"n":7,"dir":"across","row":5,"col":0,"answer":"SINGAMPULI","enum":"(10)","kind":"star","ref":"nm2670388","clue":"Acted in Maharaja (2024) and The Legend (2022)"},{"n":8,"dir":"across","row":7,"col":1,"answer":"VASANTH","enum":"(7)","kind":"director","ref":"nm1182689","clue":"Directed Nerrukku Ner (1997) and Aasai (1995)"},{"n":1,"dir":"down","row":0,"col":4,"answer":"KALAKALAPPU","enum":"(11)","kind":"film","ref":"f1912","clue":"2012 film by Sundar C. with John Vijay and Santhanam"},{"n":2,"dir":"down","row":0,"col":9,"answer":"KARTHIKRAJA","enum":"(7,4)","kind":"music","ref":"kg-q3522294","clue":"Music for Kaathala Kaathala (1998) and Dumm Dumm Dumm (2001)"},{"n":3,"dir":"down","row":1,"col":0,"answer":"ABBAS","enum":"(5)","kind":"star","ref":"nm0007806","clue":"Acted in Padayappa (1999) and Kandukondain Kandukondain (2000)"},{"n":4,"dir":"down","row":1,"col":2,"answer":"TAMANNAAH","enum":"(9)","kind":"star","ref":"nm1961459","clue":"Acted in Baahubali: The Beginning (2015) and Jailer (2023)"},{"n":9,"dir":"down","row":7,"col":7,"answer":"HERO","enum":"(4)","kind":"film","ref":"f2834","clue":"2019 film by P.S Mithran with Azhagam Perumal and Robo Shankar"}]},{"no":24,"date":"2026-12-11","w":11,"h":12,"words":[{"n":1,"dir":"across","row":0,"col":1,"answer":"VALLAVAN","enum":"(8)","kind":"film","ref":"f1372","clue":"2006 film by Silambarasan with Nayanthara and Sathyan"},{"n":3,"dir":"across","row":2,"col":5,"answer":"MAARI","enum":"(5)","kind":"film","ref":"f2280","clue":"2015 film by Balaji Mohan with Dhanush and Kaali Venkat"},{"n":4,"dir":"across","row":4,"col":0,"answer":"SIMRAN","enum":"(6)","kind":"star","ref":"nm0801264","clue":"Acted in Tourist Family (2025) and Vaaranam Aayiram (2008)"},{"n":6,"dir":"across","row":6,"col":0,"answer":"KAAKISATTAI","enum":"(5,6)","kind":"film","ref":"f2261","clue":"2015 film by R. S. Durai Senthilkumar with Manobala and Mayilsamy"},{"n":7,"dir":"across","row":8,"col":1,"answer":"RUNBABYRUN","enum":"(3,4,3)","kind":"film","ref":"f3070","clue":"2023 film by Jiyen Krishnakumar with Aishwarya Rajesh and RJ Balaji"},{"n":8,"dir":"across","row":11,"col":2,"answer":"AEGAN","enum":"(5)","kind":"film","ref":"f1469","clue":"2008 film by Raju Sundaram with Nayanthara and Ajith"},{"n":1,"dir":"down","row":0,"col":1,"answer":"VETRIMAARAN","enum":"(11)","kind":"director","ref":"kg-q7923771","clue":"Directed Asuran (2019) and Vada Chennai (2018)"},{"n":2,"dir":"down","row":1,"col":9,"answer":"VIJAYAKUMAR","enum":"(11)","kind":"star","ref":"nm0897206","clue":"Acted in Baashha (1995) and Puli (2015)"},{"n":3,"dir":"down","row":2,"col":5,"answer":"MANISHARMA","enum":"(4,6)","kind":"music","ref":"kg-q6749421","clue":"Music for Pokkiri (2007) and Sura (2010)"},{"n":5,"dir":"down","row":4,"col":7,"answer":"SATHYA","enum":"(6)","kind":"music","ref":"kg-q5006852","clue":"C. ___, music for Kanchana 2 (2015) and Engaeyum Eppothum (2011)"}]},{"no":25,"date":"2026-12-12","w":11,"h":12,"words":[{"n":1,"dir":"across","row":0,"col":0,"answer":"SHANKAR","enum":"(7)","kind":"director","ref":"kg-q1156039","clue":"Directed Enthiran (2010) and Anniyan (2005)"},{"n":5,"dir":"across","row":4,"col":0,"answer":"ROBOSHANKAR","enum":"(4,7)","kind":"star","ref":"nm5199559","clue":"Acted in The Legend (2022) and Viswasam (2019)"},{"n":6,"dir":"across","row":6,"col":0,"answer":"LIVINGSTON","enum":"(10)","kind":"star","ref":"nm1679054","clue":"Acted in Peranbu (2017) and Maareesan (2025)"},{"n":7,"dir":"across","row":8,"col":2,"answer":"PAPANASAM","enum":"(9)","kind":"film","ref":"f2304","clue":"2015 film by Jeethu Joseph with Kamal Haasan and Aruldoss"},{"n":9,"dir":"across","row":10,"col":2,"answer":"SUBASH","enum":"(6)","kind":"director","ref":"kg-q15964773","clue":"K. ___, directed Pavithra (1994) and Sathriyan (1990)"},{"n":1,"dir":"down","row":0,"col":0,"answer":"SEANROLDAN","enum":"(4,6)","kind":"music","ref":"kg-q17073747","clue":"Music for Jai Bhim (2021) and Tourist Family (2025)"},{"n":2,"dir":"down","row":0,"col":9,"answer":"PIZZA","enum":"(5)","kind":"film","ref":"f1951","clue":"2012 film by Karthik Subbaraj with Vijay Sethupathi and Karunakaran"},{"n":3,"dir":"down","row":3,"col":3,"answer":"YOGIBABU","enum":"(4,4)","kind":"star","ref":"nm6489058","clue":"Acted in Jailer (2023) and Varisu (2023)"},{"n":4,"dir":"down","row":3,"col":5,"answer":"BHAGYARAJ","enum":"(9)","kind":"star","ref":"nm0080180","clue":"Acted in Dada (2023) and Thupparivaalan (2017)"},{"n":8,"dir":"down","row":8,"col":9,"answer":"AARU","enum":"(4)","kind":"film","ref":"f1220","clue":"2005 film by Hari with Suriya and Trisha"}]},{"no":26,"date":"2026-12-13","w":11,"h":11,"words":[{"n":1,"dir":"across","row":0,"col":0,"answer":"DEVA","enum":"(4)","kind":"music","ref":"kg-q3424313","clue":"Music for Baashha (1995) and Kushi (2000)"},{"n":3,"dir":"across","row":0,"col":5,"answer":"NASSAR","enum":"(6)","kind":"star","ref":"nm0621937","clue":"Acted in Baahubali: The Beginning (2015) and Master (2021)"},{"n":6,"dir":"across","row":3,"col":1,"answer":"MARIYAAN","enum":"(8)","kind":"film","ref":"f2021","clue":"2013 film by Bharat Bala with Dhanush and Jagan"},{"n":8,"dir":"across","row":5,"col":0,"answer":"PRAKASHRAJ","enum":"(7,3)","kind":"star","ref":"nm0695177","clue":"Acted in Jai Bhim (2021) and Varisu (2023)"},{"n":9,"dir":"across","row":7,"col":0,"answer":"MUTHU","enum":"(5)","kind":"film","ref":"f740","clue":"1998 film by K.S. Ravikumar with Rajinikanth and Raghuvaran"},{"n":10,"dir":"across","row":9,"col":0,"answer":"PONVANNAN","enum":"(9)","kind":"star","ref":"nm3294569","clue":"Acted in Ayan (2009) and NGK (2018)"},{"n":2,"dir":"down","row":0,"col":2,"answer":"VIJAYANTONY","enum":"(5,6)","kind":"music","ref":"nm2537099","clue":"Music for Velayudham (2011) and Vettaikaaran (2009)"},{"n":4,"dir":"down","row":0,"col":6,"answer":"ANJATHE","enum":"(7)","kind":"film","ref":"f1472","clue":"2008 film by Mysskin with Ponvannan and M.S. Bhaskar"},{"n":5,"dir":"down","row":1,"col":4,"answer":"PRIYAMUDAN","enum":"(10)","kind":"film","ref":"f749","clue":"1998 film by Vincent Selva with Vijay and Nassar"},{"n":7,"dir":"down","row":3,"col":8,"answer":"NAAN","enum":"(4)","kind":"film","ref":"f1937","clue":"2012 film by Jeeva Shankar with Vijay Antony and Krishnamoorthy"}]},{"no":27,"date":"2026-12-14","w":11,"h":11,"words":[{"n":3,"dir":"across","row":1,"col":0,"answer":"SHAHJAHAN","enum":"(9)","kind":"film","ref":"f980","clue":"2001 film by K. S. Ravi with Vijay and Ilavarasu"},{"n":4,"dir":"across","row":3,"col":0,"answer":"DHAMU","enum":"(5)","kind":"star","ref":"nm1750758","clue":"Acted in Ghilli (2004) and Thulladha Manamum Thullum (1999)"},{"n":7,"dir":"across","row":6,"col":0,"answer":"NAANKADAVUL","enum":"(4,7)","kind":"film","ref":"f1628","clue":"2009 film by Bala with Arya and Motta Rajendran"},{"n":9,"dir":"across","row":9,"col":1,"answer":"VADIVELU","enum":"(8)","kind":"star","ref":"nm0883014","clue":"Acted in Mersal (2017) and Pokkiri (2007)"},{"n":1,"dir":"down","row":0,"col":2,"answer":"KAMALHAASAN","enum":"(5,6)","kind":"star","ref":"nm0352032","clue":"Acted in Vikram (2022) and Leo (2023)"},{"n":2,"dir":"down","row":0,"col":6,"answer":"CHIMBUDEVEN","enum":"(6,5)","kind":"director","ref":"kg-q5099316","clue":"Directed Puli (2015) and Imsai Arasan 23m Pulikesi (2006)"},{"n":4,"dir":"down","row":3,"col":0,"answer":"DHINA","enum":"(5)","kind":"music","ref":"kg-q5269579","clue":"Music for Jana (2004) and Thiruda Thirudi (2003)"},{"n":5,"dir":"down","row":3,"col":8,"answer":"ARUVI","enum":"(5)","kind":"film","ref":"f2383","clue":"2016 film by Arun Prabu Purushothaman with Bala and Kavitha Bharathy"},{"n":6,"dir":"down","row":3,"col":10,"answer":"ARULDOSS","enum":"(8)","kind":"star","ref":"nm4725798","clue":"Acted in Maharaja (2024) and Peranbu (2017)"},{"n":8,"dir":"down","row":6,"col":4,"answer":"KODI","enum":"(4)","kind":"film","ref":"f036","clue":"2016 film by R. S. Durai Senthilkumar with Dhanush and Trisha"}]},{"no":28,"date":"2026-12-15","w":11,"h":12,"words":[{"n":3,"dir":"across","row":1,"col":5,"answer":"VETTAI","enum":"(6)","kind":"film","ref":"f1972","clue":"2012 film by N. Lingusamy with Arya and Madhavan"},{"n":4,"dir":"across","row":2,"col":2,"answer":"SASI","enum":"(4)","kind":"director","ref":"kg-q7425142","clue":"Directed Pichaikkaran (2016) and Sivappu Manjal Pachai (2019)"},{"n":5,"dir":"across","row":4,"col":3,"answer":"SURAJ","enum":"(5)","kind":"director","ref":"kg-q7645322","clue":"Directed Alex Pandian (2013) and Padikathavan (2009)"},{"n":7,"dir":"across","row":6,"col":0,"answer":"KAAKAMUTTAI","enum":"(5,6)","kind":"film","ref":"f2124","clue":"2014 film by M. Manikandan with Aishwarya Rajesh and Silambarasan"},{"n":8,"dir":"across","row":8,"col":2,"answer":"MAHENDRAN","enum":"(9)","kind":"star","ref":"nm1559594","clue":"Y.G. ___, acted in Thalaivaa (2013) and Deiva Thirumagal (2011)"},{"n":9,"dir":"across","row":11,"col":3,"answer":"THAMAN","enum":"(6)","kind":"music","ref":"nm3888981","clue":"S. ___, music for Varisu (2023) and Kanchana (2011)"},{"n":1,"dir":"down","row":0,"col":9,"answer":"JAYAPRAKASH","enum":"(11)","kind":"star","ref":"nm1957308","clue":"V. ___, acted in Jai Bhim (2021) and Meiyazhagan (2024)"},{"n":2,"dir":"down","row":1,"col":0,"answer":"VELAIKKARAN","enum":"(11)","kind":"film","ref":"f2662","clue":"2017 film by M. Raja with Nayanthara and Sathish"},{"n":3,"dir":"down","row":1,"col":5,"answer":"VIKRAMVEDHA","enum":"(6,5)","kind":"film","ref":"f010","clue":"2017 film by Gayatri with Vijay Sethupathi and Madhavan"},{"n":6,"dir":"down","row":5,"col":2,"answer":"RAHMAN","enum":"(6)","kind":"music","ref":"kg-q108560","clue":"A.R. ___, music for Mersal (2017) and Enthiran (2010)"}]},{"no":29,"date":"2026-12-16","w":11,"h":11,"words":[{"n":3,"dir":"across","row":1,"col":1,"answer":"AMARKALAM","enum":"(9)","kind":"film","ref":"f777","clue":"1999 film by Saran with Ajith and Nassar"},{"n":6,"dir":"across","row":3,"col":0,"answer":"IRAIVAN","enum":"(7)","kind":"film","ref":"f3041","clue":"2023 film by I. Mueenuddin Ahmed with Nayanthara and Jayam Ravi"},{"n":7,"dir":"across","row":5,"col":0,"answer":"ILAIYARAAJA","enum":"(11)","kind":"music","ref":"kg-q2720141","clue":"Music for Nayakan (1987) and Thalapathi (1991)"},{"n":8,"dir":"across","row":7,"col":0,"answer":"SARAN","enum":"(5)","kind":"director","ref":"kg-q12977997","clue":"Directed Vasool Raja MBBS (2004) and Amarkalam (1999)"},{"n":9,"dir":"across","row":8,"col":5,"answer":"SURIYA","enum":"(6)","kind":"star","ref":"nm1421814","clue":"Acted in Jai Bhim (2021) and Soorarai Pottru (2020)"},{"n":10,"dir":"across","row":10,"col":0,"answer":"RAGHUVARAN","enum":"(10)","kind":"star","ref":"nm0706499","clue":"Acted in Sivaji (2007) and Baashha (1995)"},{"n":1,"dir":"down","row":0,"col":3,"answer":"RAJINIKANTH","enum":"(11)","kind":"star","ref":"nm0707425","clue":"Acted in Jailer (2023) and Enthiran (2010)"},{"n":2,"dir":"down","row":0,"col":8,"answer":"SATHYAPRIYA","enum":"(11)","kind":"star","ref":"nm2937208","clue":"Acted in Baashha (1995) and Rajavin Parvaiyile (1995)"},{"n":4,"dir":"down","row":1,"col":5,"answer":"KAADAN","enum":"(6)","kind":"film","ref":"f2704","clue":"2018 film by Prabhu Solomon with Srinath Alnath and Vishnu Vishal"},{"n":5,"dir":"down","row":2,"col":10,"answer":"ARRAMBAM","enum":"(8)","kind":"film","ref":"f1985","clue":"2013 film by Vishnuvardhan with Nayanthara and Ajith"}]},{"no":30,"date":"2026-12-17","w":11,"h":12,"words":[{"n":1,"dir":"across","row":0,"col":5,"answer":"LOVER","enum":"(5)","kind":"film","ref":"f3103","clue":"2024 film with Geetha Kailasam and Manikandan K."},{"n":6,"dir":"across","row":4,"col":6,"answer":"SAAMY","enum":"(5)","kind":"film","ref":"f1129","clue":"2003 film by Hari with Trisha and Vikram"},{"n":7,"dir":"across","row":6,"col":0,"answer":"POLLADHAVAN","enum":"(11)","kind":"film","ref":"f1440","clue":"2007 film by Vetrimaaran with Dhanush and Santhanam"},{"n":8,"dir":"across","row":8,"col":4,"answer":"URVASHI","enum":"(7)","kind":"star","ref":"nm0882219","clue":"Acted in Soorarai Pottru (2020) and Michael Madana Kama Rajan (1990)"},{"n":9,"dir":"across","row":10,"col":0,"answer":"DHARANI","enum":"(7)","kind":"director","ref":"nm6646790","clue":"Directed Ghilli (2004) and Kuruvi (2008)"},{"n":10,"dir":"across","row":11,"col":7,"answer":"ROJA","enum":"(4)","kind":"film","ref":"f012","clue":"1992 film by Mani Ratnam with Nassar and Arvind Swamy"},{"n":2,"dir":"down","row":0,"col":7,"answer":"VIDYASAGAR","enum":"(10)","kind":"music","ref":"kg-q3595530","clue":"Music for Anbe Sivam (2003) and Ghilli (2004)"},{"n":3,"dir":"down","row":1,"col":1,"answer":"KASHMORA","enum":"(8)","kind":"film","ref":"f2268","clue":"2015 film by Gokul with Nayanthara and Karthi"},{"n":4,"dir":"down","row":2,"col":4,"answer":"UDAYAKUMAR","enum":"(10)","kind":"director","ref":"nm7745984","clue":"R.V. ___, directed Yejaman (1993) and Singaravelan (1992)"},{"n":5,"dir":"down","row":2,"col":9,"answer":"SAMPATHRAJ","enum":"(7,3)","kind":"star","ref":"nm3164292","clue":"Acted in Jilla (2014) and Kaala (2018)"}]},{"no":31,"date":"2026-12-18","w":11,"h":12,"words":[{"n":3,"dir":"across","row":1,"col":1,"answer":"VELAYUDHAM","enum":"(10)","kind":"film","ref":"f1877","clue":"2011 film by M. Raja with Vijay and Santhanam"},{"n":8,"dir":"across","row":6,"col":0,"answer":"KARTHIKRAJA","enum":"(7,4)","kind":"music","ref":"kg-q3522294","clue":"Music for Kaathala Kaathala (1998) and Dumm Dumm Dumm (2001)"},{"n":10,"dir":"across","row":10,"col":2,"answer":"SANTHANAM","enum":"(9)","kind":"star","ref":"nm1962272","clue":"Acted in Enthiran (2010) and I (2015)"},{"n":1,"dir":"down","row":0,"col":6,"answer":"MUNISHKANTH","enum":"(11)","kind":"star","ref":"nm6106368","clue":"Acted in Maharaja (2024) and Raatchasan (2017)"},{"n":2,"dir":"down","row":0,"col":9,"answer":"BALA","enum":"(4)","kind":"director","ref":"kg-q3429883","clue":"Directed Pithamagan (2003) and Sethu (1999)"},{"n":4,"dir":"down","row":3,"col":0,"answer":"VENKATESH","enum":"(9)","kind":"director","ref":"kg-q4648485","clue":"A. ___, directed Bagavathi (2002) and Nilaave Vaa (1998)"},{"n":5,"dir":"down","row":3,"col":2,"answer":"DHARAN","enum":"(6)","kind":"music","ref":"kg-q5269143","clue":"Music for Podaa Podi (2012) and Aaha Kalyanam (2014)"},{"n":6,"dir":"down","row":3,"col":4,"answer":"MADHAVAN","enum":"(8)","kind":"star","ref":"nm0534856","clue":"Acted in Vikram Vedha (2017) and Anbe Sivam (2003)"},{"n":7,"dir":"down","row":4,"col":8,"answer":"PRASANNA","enum":"(8)","kind":"star","ref":"nm1137738","clue":"Acted in Thupparivaalan (2017) and Anjathe (2008)"},{"n":9,"dir":"down","row":6,"col":10,"answer":"ARAMM","enum":"(5)","kind":"film","ref":"f2536","clue":"2017 film by Gopi Nainar with Nayanthara and Ramachandran Durairaj"}]}]};
+const R = DATA.game.rules;
+const { $, esc } = Kit;
+const show = Kit.screens(["start", "play", "done"]);
+const KIND = { film: "Film", star: "Star", director: "Director", music: "Music" };
+
+// Today in the player's own timezone, so the puzzle turns over at their midnight.
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const todayIso = iso(new Date());
+const playable = DATA.puzzles.filter((p) => p.date <= todayIso);
+const today = playable.at(-1) || DATA.puzzles[0];
+const nice = (d) => new Date(d + "T12:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+
+let P = null, words = [], cells = {}, fill = {}, shown = new Set(), bad = new Set();
+let wi = 0, pos = 0, elapsed = 0, penalty = 0, checks = 0, reveals = 0, tick = null, done = false;
+const key = (p) => `cw-${p.no}`;
+
+function saved(p) { return Kit.store.get(key(p), null); }
+function persist() { Kit.store.set(key(P), { fill, shown: [...shown], elapsed, penalty, checks, reveals, done }); }
+
+// ---------- start ----------
+function renderStart() {
+  const s = saved(today);
+  $("s-date").textContent = `#${today.no} · ${nice(today.date)}`;
+  $("btn-play").textContent = s?.done ? `Solved in ${Kit.mmss(s.elapsed + s.penalty)} · see result` : s ? "Continue today's puzzle" : `Play #${today.no}`;
+  $("s-meta").textContent = `${today.words.length} clues · about 5 minutes`;
+  const past = playable.filter((p) => p !== today).slice(-14).reverse();
+  $("s-past-wrap").classList.toggle("hidden", !past.length);
+  $("s-past").innerHTML = past.map((p) => {
+    const st = saved(p);
+    return `<button data-no="${p.no}"><span class="mark ${st?.done ? "hit" : st ? "near" : "miss"}"></span>#${p.no} · ${nice(p.date)}</button>`;
+  }).join("");
+  $("s-past").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => open(DATA.puzzles.find((p) => p.no === +b.dataset.no))));
+  show("start");
+}
+
+// ---------- play ----------
+function open(p) {
+  P = p; words = p.words.map((w, i) => ({ ...w, i, cells: [] })); cells = {};
+  for (const w of words) for (let k = 0; k < w.answer.length; k++) {
+    const r = w.row + (w.dir === "down" ? k : 0), c = w.col + (w.dir === "across" ? k : 0), id = `${r},${c}`;
+    (cells[id] ??= { r, c, ch: w.answer[k], words: [], no: null }).words.push(w.i);
+    if (k === 0) cells[id].no = w.n;
+    w.cells.push(id);
+  }
+  const s = saved(p) || {};
+  fill = s.fill || {}; shown = new Set(s.shown || []); bad = new Set();
+  elapsed = s.elapsed || 0; penalty = s.penalty || 0; checks = s.checks || 0; reveals = s.reveals || 0; done = !!s.done;
+  if (done) return finish(false);
+  wi = 0; pos = firstEmpty(words[0]);
+  $("p-no").textContent = `#${p.no}`;
+  const board = $("board");
+  board.style.gridTemplateColumns = `repeat(${p.w}, 1fr)`;
+  board.style.maxWidth = `${p.w * 40}px`;
+  board.classList.remove("solved");
+  board.innerHTML = "";
+  for (let r = 0; r < p.h; r++) for (let c = 0; c < p.w; c++) {
+    const id = `${r},${c}`, cell = cells[id];
+    const b = document.createElement("button");
+    b.className = "cell" + (cell ? "" : " void"); b.dataset.id = id; b.tabIndex = -1;
+    if (cell) { b.setAttribute("aria-label", `Row ${r + 1} column ${c + 1}`); b.addEventListener("click", () => tapCell(id)); }
+    else b.setAttribute("aria-hidden", "true");
+    board.appendChild(b);
+  }
+  show("play"); paint();
+  clearInterval(tick); tick = setInterval(() => { elapsed++; $("p-clock").textContent = Kit.mmss(elapsed + penalty); if (elapsed % 5 === 0) persist(); }, 1000);
+}
+
+function firstEmpty(w) { const k = w.cells.findIndex((id) => !fill[id]); return k < 0 ? 0 : k; }
+const curCell = () => words[wi].cells[pos];
+
+function tapCell(id) {
+  const cell = cells[id], w = words[wi];
+  if (w.cells[pos] === id && cell.words.length > 1) wi = cell.words.find((x) => x !== wi);  // tap again: switch direction
+  else if (!cell.words.includes(wi)) wi = cell.words.find((x) => words[x].dir === w.dir) ?? cell.words[0];
+  pos = words[wi].cells.indexOf(id);
+  note(""); paint();
+}
+
+function type(ch) {
+  if (done) return;
+  const id = curCell();
+  if (shown.has(id)) { advance(); return paint(); }
+  fill[id] = ch; bad.delete(id);
+  if (solved()) return finish(true);
+  advance(); paint(); persist();
+}
+function advance() {
+  const w = words[wi];
+  for (let k = pos + 1; k < w.cells.length; k++) if (!fill[w.cells[k]]) { pos = k; return; }
+  if (w.cells.every((id) => fill[id])) return nextWord(1, true);
+  pos = Math.min(pos + 1, w.cells.length - 1);
+}
+function back() {
+  if (done) return;
+  const id = curCell();
+  if (fill[id] && !shown.has(id)) { delete fill[id]; bad.delete(id); }
+  else if (pos > 0) { pos--; const p2 = curCell(); if (!shown.has(p2)) { delete fill[p2]; bad.delete(p2); } }
+  paint(); persist();
+}
+function nextWord(step, skipFull = false) {
+  for (let n = 1; n <= words.length; n++) {
+    const j = (wi + step * n + words.length * 2) % words.length;
+    if (!skipFull || words[j].cells.some((id) => !fill[id])) { wi = j; pos = firstEmpty(words[j]); return; }
+  }
+}
+const solved = () => Object.entries(cells).every(([id, c]) => fill[id] === c.ch);
+
+function paint() {
+  const w = words[wi], active = new Set(w.cells), cur = curCell();
+  for (const b of $("board").children) {
+    const id = b.dataset.id, cell = cells[id];
+    if (!cell) continue;
+    b.className = "cell" + (active.has(id) ? " word" : "") + (id === cur ? " cur" : "") + (bad.has(id) ? " bad" : "") + (shown.has(id) ? " shown" : "");
+    b.innerHTML = (cell.no ? `<span class="no">${cell.no}</span>` : "") + esc(fill[id] || "");
+  }
+  $("clue-top").innerHTML = `<span class="kind ${w.kind}">${KIND[w.kind]}</span>${w.n} ${w.dir === "across" ? "Across" : "Down"}`;
+  $("clue-q").innerHTML = `${esc(w.clue)} <small>${esc(w.enum)}</small>`;
+  const left = words.filter((x) => x.cells.some((id) => fill[id] !== cells[id].ch)).length;
+  $("p-left").textContent = `${words.length - left} of ${words.length} words`;
+  $("p-clock").textContent = Kit.mmss(elapsed + penalty);
+}
+function note(t) { $("note").textContent = t; }
+
+// keyboard: on-screen and physical
+const ROWS = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
+$("keys").innerHTML = ROWS.map((r, i) => `<div class="kr">${[...r].map((k) => `<button data-k="${k}">${k}</button>`).join("")}${i === 2 ? `<button class="wide" data-k="back" aria-label="Delete">⌫</button>` : ""}</div>`).join("");
+$("keys").addEventListener("click", (e) => { const k = e.target.closest("button")?.dataset.k; if (k) k === "back" ? back() : type(k); });
+document.addEventListener("keydown", (e) => {
+  if ($("screen-play").classList.contains("hidden") || !$("sheet").classList.contains("hidden") || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (/^[a-z]$/i.test(e.key)) { type(e.key.toUpperCase()); e.preventDefault(); }
+  else if (e.key === "Backspace") { back(); e.preventDefault(); }
+  else if (e.key === "Tab" || e.key === "Enter") { nextWord(e.shiftKey ? -1 : 1); paint(); e.preventDefault(); }
+  else if (e.key.startsWith("Arrow")) {
+    const [dr, dc] = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[e.key];
+    const c = cells[curCell()]; let r = c.r + dr, cc = c.c + dc;
+    while (r >= 0 && cc >= 0 && r < P.h && cc < P.w && !cells[`${r},${cc}`]) { r += dr; cc += dc; }
+    if (cells[`${r},${cc}`]) {
+      const id = `${r},${cc}`, want = dr ? "down" : "across";
+      wi = cells[id].words.find((x) => words[x].dir === want) ?? cells[id].words[0];
+      pos = words[wi].cells.indexOf(id); paint();
+    }
+    e.preventDefault();
+  }
+});
+$("prev").addEventListener("click", () => { nextWord(-1); paint(); });
+$("next").addEventListener("click", () => { nextWord(1); paint(); });
+
+$("btn-check").addEventListener("click", () => {
+  const w = words[wi], wrong = w.cells.filter((id) => fill[id] && fill[id] !== cells[id].ch);
+  checks++; penalty += R.check_penalty_seconds;
+  wrong.forEach((id) => bad.add(id));
+  const empty = w.cells.filter((id) => !fill[id]).length;
+  note(wrong.length ? `${wrong.length} wrong letter${wrong.length > 1 ? "s" : ""} in red · +${R.check_penalty_seconds}s` : empty ? `All right so far · +${R.check_penalty_seconds}s` : `Correct · +${R.check_penalty_seconds}s`);
+  paint(); persist();
+});
+$("btn-reveal").addEventListener("click", () => {
+  const id = curCell();
+  if (fill[id] === cells[id].ch) { advance(); return paint(); }
+  fill[id] = cells[id].ch; shown.add(id); bad.delete(id);
+  reveals++; penalty += R.reveal_penalty_seconds;
+  note(`Revealed · +${R.reveal_penalty_seconds}s`);
+  if (solved()) return finish(true);
+  advance(); paint(); persist();
+});
+
+// all clues sheet
+$("btn-list").addEventListener("click", openSheet);
+$("clue-txt").addEventListener("click", openSheet);
+function openSheet() {
+  const part = (dir, title) => `<h3>${title}</h3>` + words.filter((w) => w.dir === dir).map((w) => {
+    const full = w.cells.every((id) => fill[id]);
+    return `<button class="cl${w.i === wi ? " on" : ""}${full ? " done" : ""}" data-i="${w.i}"><b>${w.n}</b><span><span class="kind ${w.kind}">${KIND[w.kind]}</span> ${esc(w.clue)} ${esc(w.enum)}</span></button>`;
+  }).join("");
+  $("sheet-in").innerHTML = part("across", "Across") + part("down", "Down");
+  $("sheet-in").querySelectorAll("button.cl").forEach((b) => b.addEventListener("click", () => { wi = +b.dataset.i; pos = firstEmpty(words[wi]); closeSheet(); paint(); }));
+  $("sheet").classList.remove("hidden");
+}
+function closeSheet() { $("sheet").classList.add("hidden"); }
+$("sheet").addEventListener("click", (e) => { if (e.target.id === "sheet") closeSheet(); });
+
+// ---------- done ----------
+const rate = Kit.rating({ container: $("rate"), storeKey: "cw-ratings" });
+function finish(justNow) {
+  clearInterval(tick); done = true; persist();
+  const total = elapsed + penalty;
+  if (justNow) {
+    $("board").classList.add("solved"); paint();
+    Kit.save(`plays/cw${P.no}-${Kit.tag()}`, { puzzle: P.no, date: P.date, seconds: total, solve_seconds: elapsed, checks, reveals });
+  }
+  setTimeout(() => {
+    $("d-verdict").textContent = reveals ? "Solved with help" : "Solved";
+    $("d-verdict").className = "verdict " + (reveals ? "near" : "win");
+    $("d-time").textContent = Kit.mmss(total);
+    $("d-meta").textContent = `#${P.no} · ${nice(P.date)} · ${checks ? `${checks} check${checks > 1 ? "s" : ""}` : "no checks"} · ${reveals ? `${reveals} letter${reveals > 1 ? "s" : ""} revealed` : "no reveals"}`;
+    $("d-answers").innerHTML = P.words.map((w) => `<div><span class="kind ${w.kind}">${KIND[w.kind]}</span> <b>${esc(w.answer)}</b> · ${esc(w.clue)}</div>`).join("");
+    rate.show(`cw${P.no}`, { puzzle: P.no, date: P.date, seconds: total, reveals });
+    Kit.renderSync($("sync-note"), "the puzzle makers");
+    show("done");
+  }, justNow ? 900 : 0);
+}
+$("btn-share").addEventListener("click", async () => {
+  const total = elapsed + penalty;
+  const text = `Kollywood Crossword #${P.no} ✅ ${Kit.mmss(total)}${reveals ? ` · ${reveals} reveal${reveals > 1 ? "s" : ""}` : " · no help"}`;
+  try { await navigator.clipboard.writeText(text); $("btn-share").textContent = "Copied!"; }
+  catch { $("btn-share").textContent = text; }
+  setTimeout(() => { $("btn-share").textContent = "Copy result to share"; }, 2500);
+});
+$("btn-home").addEventListener("click", renderStart);
+$("btn-play").addEventListener("click", () => open(today));
+renderStart();
+</script>
+</body>
+</html>
